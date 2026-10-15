@@ -104,7 +104,7 @@ export class TrialScene extends Phaser.Scene {
     for (const zone of ZONES) {
       for (const platform of zone.platforms) {
         const height = platform.height ?? 60;
-        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 0.24)
+        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 1)
           .setStrokeStyle(2, 0x1ee7ff, 0.8);
         this.platforms.add(tile);
         const body = tile.body as Phaser.Physics.Arcade.StaticBody;
