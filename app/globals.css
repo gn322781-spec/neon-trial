@@ -98,4 +98,4 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   .play-screen { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }.game-topbar { min-height: 32px; margin-bottom: 3px; }.game-stage { width: min(1140px, 100%, calc(177.78svh - 142px)); max-height: calc(100svh - 80px); }.game-hint { display: none; }.touch-controls { bottom: 2%; }.touch-button { width: 54px; height: 54px; }.touch-button.jump { width: 58px; height: 58px; }.game-hint { padding: 4px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
-
+@media (pointer: coarse) and (orientation: landscape) { .touch-controls { position: fixed; z-index: 10; inset: auto max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); } }
