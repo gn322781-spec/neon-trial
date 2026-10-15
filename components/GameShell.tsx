@@ -11,7 +11,7 @@ import { ApiError, claimRemoteNickname, createRemoteAttempt, fetchRanking, forge
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
 type Screen = "home" | "game" | "ranking" | "settings" | "result";
-const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, dashReady: true, checkpoint: 0 };
+const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, lives: 4, distance: 0, dashReady: true, checkpoint: 0 };
 type RankRow = { position: number; nickname: string; best_score: number };
 
 function validNickname(value: string) {
@@ -218,9 +218,12 @@ export function GameShell() {
         <div className="game-topbar">
           <button className="icon-button" onClick={() => { controls.releaseAll(); setScreen("home"); }} aria-label="Voltar ao menu">←</button>
           <div className="hud-stat"><span>PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
-          <div className="hud-stat"><span>ZONA</span><strong>0{hud.zone}<i> / 04</i></strong></div>
-          <div className="hud-stat checkpoint-hud"><span>CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}<i> / 04</i></strong></div>
+          <div className="hud-stat"><span>SETOR</span><strong>{String(hud.zone).padStart(2, "0")}</strong></div>
+          <div className="hud-stat checkpoint-hud"><span>CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}</strong></div>
           <div className="hud-stat"><span>QUEDAS</span><strong>{hud.deaths}</strong></div>
+          <div className="lives-hud" role="img" aria-label={`Vidas restantes: ${hud.lives} de 4`} title={`Vidas: ${hud.lives} de 4`}>
+            {Array.from({ length: 4 }, (_, index) => <span key={index} className={`life-heart ${index < hud.lives ? "active" : "lost"}`} aria-hidden="true">{index < hud.lives ? "♥" : "♡"}</span>)}
+          </div>
           <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
           <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
         </div>
@@ -277,11 +280,11 @@ export function GameShell() {
   if (screen === "result" && result) {
     return (
       <main className="shell interior-screen">
-        <section className="result-card"><span className="eyebrow">TENTATIVA CONCLUÍDA</span><h1>TRIAL<br /><em>COMPLETE</em></h1>
+        <section className="result-card"><span className="eyebrow">PARTIDA ENCERRADA</span><h1>GAME<br /><em>OVER.</em></h1>
           <div className="result-score"><span>PONTUAÇÃO DA TENTATIVA</span><strong>{result.score.toLocaleString("pt-BR")}</strong></div>
-          <div className="result-meta"><span>ZONAS <b>04 / 04</b></span><span>QUEDAS <b>{result.deaths}</b></span><span>TEMPO <b>{(result.elapsedMs / 1_000).toFixed(1)}s</b></span></div>
+          <div className="result-meta"><span>SETOR <b>{String(result.zone).padStart(2, "0")}</b></span><span>VIDAS <b>{result.lives} / 4</b></span><span>TEMPO <b>{(result.elapsedMs / 1_000).toFixed(1)}s</b></span></div>
           <p className={`pending-banner ${submissionStatus}`}>{submissionStatus === "confirmed" && recordUpdated ? "NOVO RECORDE" : submissionStatus === "confirmed" ? "RESULTADO CONFIRMADO" : submissionStatus === "pending" ? "VALIDANDO" : submissionStatus === "rejected" ? "TENTATIVA RECUSADA" : "PONTUAÇÃO NÃO CONFIRMADA"} — {submissionMessage || "Aguardando o servidor."}</p>
-          <div className="result-actions"><button className="primary-button" onClick={() => void start()}>TENTAR DE NOVO <span>↗</span></button>{submissionStatus === "failed" && <button className="secondary-button" onClick={() => void submitRun(result)}>TENTAR ENVIAR</button>}<button className="secondary-button" onClick={openRanking}>VER RANKING</button><button className="text-button" onClick={() => setScreen("home")}>VOLTAR AO MENU</button></div>
+          <div className="result-actions"><button className="primary-button" onClick={() => void start()}>NOVA PARTIDA <span>↗</span></button>{submissionStatus === "failed" && <button className="secondary-button" onClick={() => void submitRun(result)}>TENTAR ENVIAR</button>}<button className="secondary-button" onClick={openRanking}>VER RANKING</button><button className="text-button" onClick={() => setScreen("home")}>VOLTAR AO MENU</button></div>
         </section>
       </main>
     );
@@ -292,15 +295,14 @@ export function GameShell() {
       <div className="home-grid" />
       <header className="topbar"><a className="wordmark" href="#top" onClick={(event) => event.preventDefault()}><span className="wordmark-icon">N</span> NEON<span>TRIAL</span></a><button className="text-button settings-link" onClick={() => { setNicknameDraft(nickname); setScreen("settings"); }}>CONFIGURAÇÕES <span>↗</span></button></header>
       <section className="hero" id="top">
-        <div className="hero-copy"><span className="eyebrow"><span className="live-dot" /> SOLO PRECISION PLATFORMER / BUILD 0.1</span><h1>ONE MORE<br /><em>RUN.</em></h1><p>Salte. Acerte o tempo. Aprenda o percurso.<br />Quatro zonas entre você e o próximo recorde.</p>
+        <div className="hero-copy"><span className="eyebrow"><span className="live-dot" /> SOLO PRECISION PLATFORMER / BUILD 0.2</span><h1>ONE MORE<br /><em>RUN.</em></h1><p>Salte. Acerte o tempo. Aprenda o percurso.<br />A progressão é infinita. Você tem quatro vidas.</p>
           <div className="hero-actions"><button className="primary-button" onClick={() => void start()}>INICIAR TRIAL <span>↗</span></button><button className="secondary-button" onClick={openRanking}>RANKING GLOBAL</button></div>
           <div className="pilot-line"><span className="avatar">{nickname ? nickname.slice(0, 1).toUpperCase() : "?"}</span><span><small>PILOTO</small><strong>{nickname || "Escolha um apelido"}</strong></span><button className="edit-name" onClick={() => { setNicknameDraft(nickname); setScreen("settings"); }}>EDITAR ↗</button></div>
         </div>
-        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="art-platform platform-a"/><div className="art-platform platform-b"/><div className="art-platform platform-c"/><div className="art-player"/><div className="art-crystal crystal-a"/><div className="art-crystal crystal-b"/><div className="art-scanline"/><span className="art-coordinate">NEON CITY / 04</span><span className="art-axis">RUN — JUMP — REPEAT</span></div>
+        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="art-platform platform-a"/><div className="art-platform platform-b"/><div className="art-platform platform-c"/><div className="art-player"/><div className="art-crystal crystal-a"/><div className="art-crystal crystal-b"/><div className="art-scanline"/><span className="art-coordinate">NEON CITY / ∞</span><span className="art-axis">RUN — JUMP — REPEAT</span></div>
       </section>
-      <section className="feature-strip"><div><span>01</span><strong>PRECISÃO</strong><small>Coyote time + jump buffer</small></div><div><span>02</span><strong>QUATRO ZONAS</strong><small>Aprenda. Domine. Sobreviva.</small></div><div><span>03</span><strong>SEU MELHOR</strong><small>Ranking online após configurar o servidor</small></div></section>
+      <section className="feature-strip"><div><span>01</span><strong>PRECISÃO</strong><small>Coyote time + jump buffer</small></div><div><span>02</span><strong>PROGRESSÃO INFINITA</strong><small>Desafios mais difíceis a cada setor</small></div><div><span>03</span><strong>SEU MELHOR</strong><small>Ranking online com sua melhor pontuação</small></div></section>
       <footer className="home-footer"><span>© NEON TRIAL / {GAME_VERSION.toUpperCase()}</span><span>UMA TENTATIVA DE CADA VEZ</span><span className="connection-state"><i /> LOCAL / SERVIDOR OFFLINE</span></footer>
     </main>
   );
 }
-
