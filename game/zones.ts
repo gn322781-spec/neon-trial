@@ -21,7 +21,7 @@ export const ZONES: ZoneSpec[] = [
       { x: 180, y: 510, width: 360 }, { x: 660, y: 510, width: 330 },
       { x: 410, y: 420, width: 150 }, { x: 610, y: 350, width: 130 }, { x: 850, y: 420, width: 190 },
     ],
-    crystals: [{ x: 350, y: 440, id: "c1" }, { x: 460, y: 370, id: "c2" }, { x: 660, y: 300, id: "c3" }, { x: 900, y: 370, id: "c4" }],
+    crystals: [{ x: 300, y: 445, id: "c1" }, { x: 460, y: 370, id: "c2" }, { x: 660, y: 300, id: "c3" }, { x: 900, y: 370, id: "c4" }],
     hazards: [{ x: 560, y: 465, width: 42, height: 30, kind: "spike" }], enemies: [],
   },
   {
@@ -57,3 +57,4 @@ export const ZONES: ZoneSpec[] = [
     enemies: [{ x: 3_550, y: 385, id: "t1" }, { x: 4_050, y: 400, id: "t2" }],
   },
 ];
+
