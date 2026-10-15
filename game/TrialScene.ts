@@ -34,7 +34,7 @@ const SEGMENT_LENGTH = 1_000;
 const CHUNK_AHEAD = 2;
 const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
-const PLAYER_ART_SCALE = 0.12;
+const PLAYER_ART_SCALE = 0.22;
 const SCENERY_TEXTURE = "neon-trial-city";
 const PICKUP_TEXTURE = "cigarette-pack";
 const PLAYER_TEXTURES = {
@@ -118,7 +118,7 @@ export class TrialScene extends Phaser.Scene {
     for (const zone of ZONES) {
       for (const platform of zone.platforms) {
         const height = platform.height ?? 60;
-        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 0.24)
+        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 1)
           .setStrokeStyle(2, 0x1ee7ff, 0.8);
         this.platforms.add(tile);
         const body = tile.body as Phaser.Physics.Arcade.StaticBody;
@@ -150,7 +150,7 @@ export class TrialScene extends Phaser.Scene {
     this.player = this.add.rectangle(75, 458, 28, 40, 0xf3fbff, 0).setVisible(false);
     this.physics.add.existing(this.player);
     this.body = this.player.body as Phaser.Physics.Arcade.Body;
-    this.body.setSize(22, 36);
+    this.body.setSize(40, 66);
     this.body.setCollideWorldBounds(true);
     this.body.setGravityY(PHYSICS.gravity);
     this.physics.add.collider(this.player, this.platforms);
@@ -255,7 +255,7 @@ export class TrialScene extends Phaser.Scene {
     for (let part = 0; part < 3; part += 1) {
       const center = left + platformWidth / 2;
       centers.push(center);
-      const platform = this.add.rectangle(center, 510, platformWidth, 60, 0x102134, 0.36)
+      const platform = this.add.rectangle(center, 510, platformWidth, 60, 0x102134, 1)
         .setStrokeStyle(2, 0x1ee7ff, 0.88);
       this.platforms.add(platform);
       (platform.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
