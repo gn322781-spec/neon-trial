@@ -143,7 +143,7 @@ export function GameShell() {
     setScreen("ranking");
   };
 
-  const start = async (nicknameForRun = nickname) => {
+  const start = async (nicknameForRun = nickname, localOnly = false) => {
     if (!nicknameForRun) {
       setNicknameDraft("");
       setNicknameError("Escolha um apelido para iniciar sua primeira tentativa.");
@@ -156,7 +156,7 @@ export function GameShell() {
     setSubmissionStatus("idle");
     setSubmissionMessage("");
     setRecordUpdated(false);
-    if (getSupabaseConfig()) {
+    if (!localOnly && getSupabaseConfig()) {
       setAttemptStatus("connecting");
       attemptRef.current = createRemoteAttempt(nicknameForRun, GAME_VERSION).catch(() => null);
       void attemptRef.current.then((attempt) => setAttemptStatus(attempt ? "ready" : "local"));
@@ -201,8 +201,11 @@ export function GameShell() {
       } else {
         persistNickname(clean);
         setNicknameDraft(clean);
-        setProfileNotice("O servidor não respondeu. Apelido local salvo; ele ainda não está reservado no ranking.");
-        void start(clean);
+        const errorCode = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "";
+        setProfileNotice(errorCode === "anonymous_provider_disabled"
+          ? "O login anônimo do Supabase está desativado. Apelido salvo localmente; o ranking online ainda não está disponível."
+          : "O servidor demorou para responder. Apelido salvo localmente; o ranking online ainda não está disponível.");
+        void start(clean, true);
       }
     } finally {
       setProfileSaving(false);
