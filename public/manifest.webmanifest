@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "NEON TRIAL",
+  "short_name": "NEON TRIAL",
+  "description": "Um platformer de precisão arcade.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#070d19",
+  "theme_color": "#070d19",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

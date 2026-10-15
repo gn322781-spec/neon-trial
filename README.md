@@ -32,7 +32,7 @@ The automated tests cover reward de-duplication, the score floor, simultaneous i
 
 ## Publish with GitHub and Vercel
 
-The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml`. It runs lint, tests, TypeScript checks and a production build for pull requests and pushes to `main`.
+The repository includes a GitHub Actions workflow at `.github/workflows/ci.yml`. It runs lint, tests, TypeScript checks and a production build for pull requests and pushes to `main` or `master`.
 
 1. Push this project to a GitHub repository using the `main` branch.
 2. Import that repository into Vercel and keep the detected Next.js build settings.
@@ -63,4 +63,3 @@ The app includes a web manifest, a project icon and a service worker. It caches 
 - Database migrations and RLS policies are included but have not been applied to a live Supabase project in this workspace. Verify the anonymous provider and SQL function grants after applying them.
 - A result from a server-created attempt is held in a small local pending queue if the submission request loses its connection; the app retries when it comes back online. Runs that never received a server attempt ID cannot be submitted later.
 - Test on physical landscape-oriented phones before tuning final movement values and touch placement.
-
