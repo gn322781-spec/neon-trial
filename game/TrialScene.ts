@@ -23,6 +23,8 @@ const WORLD_WIDTH = 4_200;
 const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
 const PLAYER_ART_SCALE = 0.12;
+const SCENERY_TEXTURE = "neon-trial-city";
+const PICKUP_TEXTURE = "cigarette-pack";
 const PLAYER_TEXTURES = {
   idle: "player-idle",
   walkOne: "player-walk-one",
@@ -79,6 +81,8 @@ export class TrialScene extends Phaser.Scene {
   }
 
   preload() {
+    this.load.image(SCENERY_TEXTURE, "/background/neon-trial-city.webp");
+    this.load.image(PICKUP_TEXTURE, "/items/cigarette-pack.webp");
     this.load.image(PLAYER_TEXTURES.idle, "/character/01_parado_idle.png");
     this.load.image(PLAYER_TEXTURES.walkOne, "/character/02_andando_passada_1.png");
     this.load.image(PLAYER_TEXTURES.walkTwo, "/character/03_andando_passada_2.png");
@@ -100,7 +104,7 @@ export class TrialScene extends Phaser.Scene {
     for (const zone of ZONES) {
       for (const platform of zone.platforms) {
         const height = platform.height ?? 60;
-        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134)
+        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 0.24)
           .setStrokeStyle(2, 0x1ee7ff, 0.8);
         this.platforms.add(tile);
         const body = tile.body as Phaser.Physics.Arcade.StaticBody;
@@ -108,11 +112,11 @@ export class TrialScene extends Phaser.Scene {
         this.add.rectangle(platform.x, platform.y - height / 2, platform.width, 4, 0x28f0ff, 0.8);
       }
       for (const pickup of zone.crystals) {
-        const crystal = this.add.circle(pickup.x, pickup.y, 10, 0xffe66e).setStrokeStyle(2, 0xffffff, 0.9);
+        const crystal = this.add.image(pickup.x, pickup.y, PICKUP_TEXTURE).setDisplaySize(24, 40).setDepth(1);
         crystal.setData("crystalId", pickup.id);
         this.crystals.add(crystal);
         (crystal.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
-        this.tweens.add({ targets: crystal, y: pickup.y - 8, duration: 650, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+        this.tweens.add({ targets: crystal, y: pickup.y - 6, duration: 650, yoyo: true, repeat: -1, ease: "Sine.inOut" });
       }
       for (const hazard of zone.hazards) this.addHazard(hazard.x, hazard.y, hazard.width, hazard.height, hazard.kind);
       for (const enemy of zone.enemies) {
@@ -137,7 +141,7 @@ export class TrialScene extends Phaser.Scene {
     this.body.setCollideWorldBounds(true);
     this.body.setGravityY(PHYSICS.gravity);
     this.physics.add.collider(this.player, this.platforms);
-    this.physics.add.overlap(this.player, this.crystals, (_player, crystal) => this.collect(crystal as Phaser.GameObjects.Arc), undefined, this);
+    this.physics.add.overlap(this.player, this.crystals, (_player, crystal) => this.collect(crystal as Phaser.GameObjects.Image), undefined, this);
     this.playerArt = this.add.image(75, 476, PLAYER_TEXTURES.idle)
       .setOrigin(0.5, 1).setScale(PLAYER_ART_SCALE).setDepth(2);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.08, -250, 0);
@@ -152,15 +156,9 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private drawBackdrop() {
-    this.add.rectangle(WORLD_WIDTH / 2, VIEW_HEIGHT / 2, WORLD_WIDTH, VIEW_HEIGHT, 0x070d19).setScrollFactor(0);
-    const grid = this.add.graphics().setScrollFactor(0).setAlpha(0.24);
-    grid.lineStyle(1, 0x17364b, 0.7);
-    for (let x = 0; x <= VIEW_WIDTH; x += 48) grid.lineBetween(x, 0, x, VIEW_HEIGHT);
-    for (let y = 0; y <= VIEW_HEIGHT; y += 48) grid.lineBetween(0, y, VIEW_WIDTH, y);
-    const skyline = this.add.graphics().setScrollFactor(0).setAlpha(0.35);
-    skyline.fillStyle(0x101c31, 1);
-    for (let x = 0; x < VIEW_WIDTH + 120; x += 120) skyline.fillRect(x, 250 + ((x * 7) % 120), 72, 290);
-    this.add.rectangle(WORLD_WIDTH / 2, 535, WORLD_WIDTH, 10, 0x141f34).setStrokeStyle(1, 0x194862);
+    this.add.image(WORLD_WIDTH / 2, VIEW_HEIGHT / 2, SCENERY_TEXTURE)
+      .setDisplaySize(WORLD_WIDTH, VIEW_HEIGHT)
+      .setDepth(-10);
   }
 
   private addHazard(x: number, y: number, width: number, height: number, kind: string) {
@@ -177,7 +175,7 @@ export class TrialScene extends Phaser.Scene {
     this.checkpointFlags.push(flag);
   }
 
-  private collect(crystal: Phaser.GameObjects.Arc) {
+  private collect(crystal: Phaser.GameObjects.Image) {
     const id = crystal.getData("crystalId") as string | undefined;
     if (!id || !this.award("crystal", `crystal:${id}`)) return;
     this.audio.play("crystal");
