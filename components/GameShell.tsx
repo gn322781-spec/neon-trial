@@ -143,8 +143,8 @@ export function GameShell() {
     setScreen("ranking");
   };
 
-  const start = async () => {
-    if (!nickname) {
+  const start = async (nicknameForRun = nickname) => {
+    if (!nicknameForRun) {
       setNicknameDraft("");
       setNicknameError("Escolha um apelido para iniciar sua primeira tentativa.");
       setScreen("settings");
@@ -158,7 +158,7 @@ export function GameShell() {
     setRecordUpdated(false);
     if (getSupabaseConfig()) {
       setAttemptStatus("connecting");
-      attemptRef.current = createRemoteAttempt(nickname, GAME_VERSION).catch(() => null);
+      attemptRef.current = createRemoteAttempt(nicknameForRun, GAME_VERSION).catch(() => null);
       void attemptRef.current.then((attempt) => setAttemptStatus(attempt ? "ready" : "local"));
     } else {
       attemptRef.current = Promise.resolve(null);
@@ -192,6 +192,7 @@ export function GameShell() {
       setProfileNotice(claimed
         ? "Apelido validado e reservado para sua identidade anônima no servidor."
         : "Apelido salvo somente neste navegador. Configure o Supabase para validar e reservar o nome no ranking.");
+      void start(claimed ?? clean);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setNicknameError("Este apelido já está em uso. Escolha outro para continuar.");
@@ -201,6 +202,7 @@ export function GameShell() {
         persistNickname(clean);
         setNicknameDraft(clean);
         setProfileNotice("O servidor não respondeu. Apelido local salvo; ele ainda não está reservado no ranking.");
+        void start(clean);
       }
     } finally {
       setProfileSaving(false);
