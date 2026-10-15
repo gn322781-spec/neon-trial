@@ -16,12 +16,24 @@ type Keys = {
   left: Phaser.Input.Keyboard.Key; right: Phaser.Input.Keyboard.Key; jump: Phaser.Input.Keyboard.Key;
   dash: Phaser.Input.Keyboard.Key; attack: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key;
   d: Phaser.Input.Keyboard.Key; w: Phaser.Input.Keyboard.Key; z: Phaser.Input.Keyboard.Key;
-  up: Phaser.Input.Keyboard.Key; c: Phaser.Input.Keyboard.Key;
+  up: Phaser.Input.Keyboard.Key; down: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; c: Phaser.Input.Keyboard.Key;
 };
 
 const WORLD_WIDTH = 4_200;
 const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
+const PLAYER_ART_SCALE = 0.12;
+const PLAYER_TEXTURES = {
+  idle: "player-idle",
+  walkOne: "player-walk-one",
+  walkTwo: "player-walk-two",
+  crouch: "player-crouch",
+  jumpRise: "player-jump-rise",
+  jumpAir: "player-jump-air",
+  landing: "player-landing",
+  dash: "player-dash",
+} as const;
+
 export class TrialScene extends Phaser.Scene {
   private readonly controls: Controls;
   private readonly audio: AudioFeedback;
@@ -37,6 +49,7 @@ export class TrialScene extends Phaser.Scene {
   private readonly score: ScoreState = createScoreState();
   private readonly scoreEvents: AttemptEvent[] = [];
   private keys!: Keys;
+  private playerArt!: Phaser.GameObjects.Image;
   private previous: MobileSnapshot = { left: false, right: false, jump: false, dash: false, attack: false };
   private runStartedAt = 0;
   private checkpointX = 75;
@@ -54,6 +67,8 @@ export class TrialScene extends Phaser.Scene {
   private attackUntil = 0;
   private attackVisual?: Phaser.GameObjects.Rectangle;
   private finishLine!: Phaser.GameObjects.Rectangle;
+  private wasAirborne = false;
+  private landingUntil = 0;
 
   constructor(controls: Controls, audio: AudioFeedback, onHud: (hud: TrialHud) => void, onResult: (result: TrialResult) => void) {
     super({ key: "TrialScene" });
@@ -61,6 +76,17 @@ export class TrialScene extends Phaser.Scene {
     this.audio = audio;
     this.onHud = onHud;
     this.onResult = onResult;
+  }
+
+  preload() {
+    this.load.image(PLAYER_TEXTURES.idle, "/character/01_parado_idle.png");
+    this.load.image(PLAYER_TEXTURES.walkOne, "/character/02_andando_passada_1.png");
+    this.load.image(PLAYER_TEXTURES.walkTwo, "/character/03_andando_passada_2.png");
+    this.load.image(PLAYER_TEXTURES.crouch, "/character/04_agachado.png");
+    this.load.image(PLAYER_TEXTURES.jumpRise, "/character/05_pulo_subida.png");
+    this.load.image(PLAYER_TEXTURES.jumpAir, "/character/06_pulo_no_ar.png");
+    this.load.image(PLAYER_TEXTURES.landing, "/character/07_aterrissagem.png");
+    this.load.image(PLAYER_TEXTURES.dash, "/character/08_dash_ataque.png");
   }
 
   create() {
@@ -104,7 +130,7 @@ export class TrialScene extends Phaser.Scene {
 
     this.finishLine = this.add.rectangle(4_130, 390, 8, 210, 0x7c4dff).setStrokeStyle(2, 0xb89bff);
     this.add.text(4_080, 260, "FINISH", { fontFamily: "monospace", fontSize: "18px", color: "#c6b2ff" });
-    this.player = this.add.rectangle(75, 458, 28, 40, 0xf3fbff).setStrokeStyle(3, 0x35efff);
+    this.player = this.add.rectangle(75, 458, 28, 40, 0xf3fbff, 0).setVisible(false);
     this.physics.add.existing(this.player);
     this.body = this.player.body as Phaser.Physics.Arcade.Body;
     this.body.setSize(22, 36);
@@ -112,12 +138,14 @@ export class TrialScene extends Phaser.Scene {
     this.body.setGravityY(PHYSICS.gravity);
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.overlap(this.player, this.crystals, (_player, crystal) => this.collect(crystal as Phaser.GameObjects.Arc), undefined, this);
+    this.playerArt = this.add.image(75, 476, PLAYER_TEXTURES.idle)
+      .setOrigin(0.5, 1).setScale(PLAYER_ART_SCALE).setDepth(2);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.08, -250, 0);
     this.cameras.main.setDeadzone(300, 130);
 
     this.keys = this.input.keyboard!.addKeys({
       left: "LEFT", right: "RIGHT", jump: "SPACE", dash: "SHIFT", attack: "X",
-      a: "A", d: "D", w: "W", z: "Z", up: "UP", c: "C",
+      a: "A", d: "D", w: "W", z: "Z", up: "UP", down: "DOWN", s: "S", c: "C",
     }) as Keys;
     this.runStartedAt = performance.now();
     this.emitHud();
@@ -167,6 +195,7 @@ export class TrialScene extends Phaser.Scene {
       jump: mobile.jump || keyboard.jump.isDown || keyboard.w.isDown || keyboard.z.isDown || keyboard.up.isDown,
       dash: mobile.dash || keyboard.dash.isDown || keyboard.c.isDown,
       attack: mobile.attack || keyboard.attack.isDown,
+      down: keyboard.down.isDown || keyboard.s.isDown,
     };
     const justPressed = (action: keyof MobileSnapshot) => input[action] && !this.previous[action];
     if (input.left) this.facing = -1;
@@ -176,6 +205,12 @@ export class TrialScene extends Phaser.Scene {
     if (justPressed("jump")) this.jumpBufferUntil = time + PHYSICS.jumpBufferMs;
 
     const direction = Number(input.right) - Number(input.left);
+    if (grounded && this.wasAirborne) {
+      this.landingUntil = time + 190;
+      this.wasAirborne = false;
+    } else if (!grounded) {
+      this.wasAirborne = true;
+    }
     if (time < this.dashUntil) {
       this.body.setVelocity(this.facing * PHYSICS.dashSpeed, 0);
       this.body.setAllowGravity(false);
@@ -216,9 +251,23 @@ export class TrialScene extends Phaser.Scene {
 
     const current = this.player.x < 1_000 ? 0 : this.player.x < 2_000 ? 1 : this.player.x < 3_000 ? 2 : 3;
     this.currentZone = current;
-    this.player.setFillStyle(time < this.invulnerableUntil ? 0x62ffb3 : 0xf3fbff);
+    this.updatePlayerArt(time, grounded, direction, input.down);
+    this.playerArt.setTint(time < this.invulnerableUntil ? 0x62ffb3 : 0xffffff);
     if (time >= this.hudAt) this.emitHud();
     this.previous = input;
+  }
+
+  private updatePlayerArt(time: number, grounded: boolean, direction: number, crouching: boolean) {
+    let texture: string = PLAYER_TEXTURES.idle;
+    if (time < this.dashUntil || time < this.attackUntil) texture = PLAYER_TEXTURES.dash;
+    else if (grounded && crouching) texture = PLAYER_TEXTURES.crouch;
+    else if (grounded && time < this.landingUntil) texture = PLAYER_TEXTURES.landing;
+    else if (!grounded) texture = this.body.velocity.y < 0 ? PLAYER_TEXTURES.jumpRise : PLAYER_TEXTURES.jumpAir;
+    else if (direction) texture = Math.floor(time / 150) % 2 === 0 ? PLAYER_TEXTURES.walkOne : PLAYER_TEXTURES.walkTwo;
+
+    if (this.playerArt.texture.key !== texture) this.playerArt.setTexture(texture);
+    this.playerArt.setPosition(this.player.x, this.player.y + 18).setFlipX(this.facing < 0);
+    this.playerArt.setAlpha(this.respawning ? 0.55 : 1);
   }
 
   private updateHazards(time: number) {
@@ -298,11 +347,12 @@ export class TrialScene extends Phaser.Scene {
     this.audio.haptic(110);
     this.award("death", `death:${this.deaths}`);
     this.controls.releaseAll();
-    this.player.setFillStyle(0xff416e).setAlpha(0.55);
+    this.playerArt.setAlpha(0.55);
     this.time.delayedCall(420, () => {
       this.player.setPosition(this.checkpointX, 458).setAlpha(1);
       this.body.setVelocity(0, 0);
       this.body.setAllowGravity(true);
+      this.playerArt.setPosition(this.player.x, this.player.y + 18).setTexture(PLAYER_TEXTURES.idle).setAlpha(1);
       this.invulnerableUntil = this.time.now + 1_050;
       this.nextDashAt = this.time.now;
       this.respawning = false;
@@ -347,3 +397,4 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
+

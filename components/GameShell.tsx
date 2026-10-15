@@ -220,7 +220,7 @@ export function GameShell() {
           <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
         </div>
         <GameCanvas runId={runId} controls={controls} audio={audio} onHud={onHud} onResult={onResult} />
-        <div className="game-hint"><span>← → MOVER</span><span>ESPAÇO PULAR</span><span>SHIFT DASH</span><span>X ATACAR</span></div>
+        <div className="game-hint"><span>← → MOVER</span><span>↓ AGACHAR</span><span>ESPAÇO PULAR</span><span>SHIFT DASH</span><span>X ATACAR</span></div>
         <div className="portrait-message"><span>↻</span><strong>Gire o aparelho</strong><small>NEON TRIAL foi projetado para jogar na horizontal.</small></div>
       </main>
     );
@@ -263,7 +263,7 @@ export function GameShell() {
             <button className="primary-button compact" type="submit" disabled={profileSaving}>{profileSaving ? "VALIDANDO…" : "SALVAR APELIDO"} <span>↗</span></button>
           </form>
           <div className="audio-settings"><label htmlFor="volume">Efeitos sonoros <b>{Math.round(volume * 100)}%</b></label><input id="volume" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); audio.setVolume(next); }} /><label className="vibration-setting"><input type="checkbox" checked={vibration} onChange={(event) => { const next = event.target.checked; setVibration(next); audio.setVibration(next); }} /> Vibração nos momentos importantes, quando suportada</label></div>
-          <div className="settings-note"><strong>CONTROLES</strong><p>Teclado: setas ou A/D, Espaço para pular, Shift para dash e X para atacar. No celular, use os botões nas laterais; os comandos aceitam multitoque.</p></div>
+          <div className="settings-note"><strong>CONTROLES</strong><p>Teclado: setas ou A/D para mover, ↓/S para agachar, Espaço para pular, Shift para dash e X para atacar. No celular, use os botões nas laterais; os comandos aceitam multitoque.</p></div>
         </section>
       </main>
     );
@@ -291,10 +291,11 @@ export function GameShell() {
           <div className="hero-actions"><button className="primary-button" onClick={() => void start()}>INICIAR TRIAL <span>↗</span></button><button className="secondary-button" onClick={openRanking}>RANKING GLOBAL</button></div>
           <div className="pilot-line"><span className="avatar">{nickname ? nickname.slice(0, 1).toUpperCase() : "?"}</span><span><small>PILOTO</small><strong>{nickname || "Escolha um apelido"}</strong></span><button className="edit-name" onClick={() => { setNicknameDraft(nickname); setScreen("settings"); }}>EDITAR ↗</button></div>
         </div>
-        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="art-platform platform-a"/><div className="art-platform platform-b"/><div className="art-platform platform-c"/><div className="art-player"><span/></div><div className="art-crystal crystal-a"/><div className="art-crystal crystal-b"/><div className="art-scanline"/><span className="art-coordinate">NEON CITY / 04</span><span className="art-axis">RUN — JUMP — REPEAT</span></div>
+        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="art-platform platform-a"/><div className="art-platform platform-b"/><div className="art-platform platform-c"/><div className="art-player"/><div className="art-crystal crystal-a"/><div className="art-crystal crystal-b"/><div className="art-scanline"/><span className="art-coordinate">NEON CITY / 04</span><span className="art-axis">RUN — JUMP — REPEAT</span></div>
       </section>
       <section className="feature-strip"><div><span>01</span><strong>PRECISÃO</strong><small>Coyote time + jump buffer</small></div><div><span>02</span><strong>QUATRO ZONAS</strong><small>Aprenda. Domine. Sobreviva.</small></div><div><span>03</span><strong>SEU MELHOR</strong><small>Ranking online após configurar o servidor</small></div></section>
       <footer className="home-footer"><span>© NEON TRIAL / {GAME_VERSION.toUpperCase()}</span><span>UMA TENTATIVA DE CADA VEZ</span><span className="connection-state"><i /> LOCAL / SERVIDOR OFFLINE</span></footer>
     </main>
   );
 }
+
