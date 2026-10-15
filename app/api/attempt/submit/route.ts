@@ -3,7 +3,7 @@ import { GAME_VERSION, type ScoreEvent } from "@/game/rules";
 import { authenticateAnonymousRequest, bearerToken } from "@/lib/supabase/server";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
-const SCORE_EVENTS = new Set<ScoreEvent>(["section", "crystal", "target", "zone", "death", "finish"]);
+const SCORE_EVENTS = new Set<ScoreEvent>(["section", "crystal", "target", "zone", "death"]);
 
 export async function POST(request: NextRequest) {
   if (!getSupabaseConfig()) return NextResponse.json({ code: "supabase_unconfigured" }, { status: 503 });
@@ -16,18 +16,18 @@ export async function POST(request: NextRequest) {
     if (typeof body !== "object" || body === null) return NextResponse.json({ code: "invalid_submission" }, { status: 400 });
     const value = body as Record<string, unknown>;
     if (typeof value.attemptId !== "string" || !/^[0-9a-f-]{36}$/i.test(value.attemptId) || value.gameVersion !== GAME_VERSION
-      || !Number.isInteger(value.score) || !Number.isInteger(value.deaths) || !Number.isInteger(value.zonesCompleted)
-      || !Number.isInteger(value.elapsedMs) || value.completed !== true || !Array.isArray(value.events) || value.events.length > 128) {
+      || !Number.isSafeInteger(value.score) || !Number.isInteger(value.deaths) || !Number.isSafeInteger(value.zonesCompleted)
+      || !Number.isSafeInteger(value.elapsedMs) || value.completed !== true || !Array.isArray(value.events) || value.events.length > 128) {
       return NextResponse.json({ code: "invalid_submission" }, { status: 400 });
     }
     const events = value.events as Array<Record<string, unknown>>;
     const validEvents = events.every((event) => typeof event === "object" && event !== null
       && typeof event.event === "string" && SCORE_EVENTS.has(event.event as ScoreEvent)
       && typeof event.key === "string" && event.key.length <= 48
-      && Number.isInteger(event.at_ms) && Number(event.at_ms) >= 0
-      && Number.isInteger(event.x) && Number(event.x) >= 0 && Number(event.x) <= 4_200);
-    if (!validEvents || Number(value.score) < 0 || Number(value.score) > 3_000 || Number(value.deaths) < 0 || Number(value.deaths) > 100
-      || Number(value.zonesCompleted) !== 4 || Number(value.elapsedMs) < 0 || Number(value.elapsedMs) > 7_200_000) {
+      && Number.isSafeInteger(event.at_ms) && Number(event.at_ms) >= 0
+      && Number.isInteger(event.x) && Number(event.x) >= 0 && Number(event.x) <= 2_147_483_647);
+    if (!validEvents || Number(value.score) < 0 || Number(value.deaths) !== 4 || Number(value.zonesCompleted) < 0
+      || Number(value.elapsedMs) < 0) {
       return NextResponse.json({ code: "invalid_submission" }, { status: 400 });
     }
     const { data, error } = await identity.client.rpc("submit_attempt", {

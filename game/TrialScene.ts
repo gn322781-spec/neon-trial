@@ -2,16 +2,26 @@ import * as Phaser from "phaser";
 import { AudioFeedback } from "@/game/audio";
 import { Controls } from "@/game/controls";
 import { PHYSICS, jumpVelocityAfterRelease } from "@/game/physics";
-import { awardScore, createScoreState, GAME_VERSION, type ScoreEvent, type ScoreState } from "@/game/rules";
+import { awardScore, createScoreState, GAME_VERSION, STARTING_LIVES, SURVIVAL_SCORE_PER_SECOND, type ScoreEvent, type ScoreState } from "@/game/rules";
 import { ZONES } from "@/game/zones";
 
-export type TrialHud = { score: number; zone: number; deaths: number; dashReady: boolean; checkpoint: number };
+export type TrialHud = { score: number; zone: number; deaths: number; lives: number; distance: number; dashReady: boolean; checkpoint: number };
 export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: number };
 export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameVersion: string; events: AttemptEvent[]; zonesCompleted: number };
 
 type MobileSnapshot = ReturnType<Controls["snapshot"]>;
-type DamageHazard = { shape: Phaser.GameObjects.Rectangle; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string };
+type DamageHazard = { shape: Phaser.GameObjects.Rectangle; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
 type Target = Phaser.GameObjects.Rectangle & { targetId: string; activeTarget: boolean };
+type GeneratedSegment = {
+  start: number;
+  end: number;
+  renderEnd: number;
+  checkpointX: number;
+  checkpoint?: Phaser.GameObjects.Triangle;
+  platforms: Phaser.GameObjects.Rectangle[];
+  objects: Phaser.GameObjects.GameObject[];
+  hazards: DamageHazard[];
+};
 type Keys = {
   left: Phaser.Input.Keyboard.Key; right: Phaser.Input.Keyboard.Key; jump: Phaser.Input.Keyboard.Key;
   dash: Phaser.Input.Keyboard.Key; attack: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key;
@@ -20,9 +30,11 @@ type Keys = {
 };
 
 const WORLD_WIDTH = 4_200;
+const SEGMENT_LENGTH = 1_000;
+const CHUNK_AHEAD = 2;
 const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
-const PLAYER_ART_SCALE = 0.22;
+const PLAYER_ART_SCALE = 0.12;
 const SCENERY_TEXTURE = "neon-trial-city";
 const PICKUP_TEXTURE = "cigarette-pack";
 const PLAYER_TEXTURES = {
@@ -46,6 +58,7 @@ export class TrialScene extends Phaser.Scene {
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private crystals!: Phaser.Physics.Arcade.StaticGroup;
   private readonly hazards: DamageHazard[] = [];
+  private readonly generatedSegments: GeneratedSegment[] = [];
   private readonly targets: Target[] = [];
   private readonly checkpointFlags: Phaser.GameObjects.Triangle[] = [];
   private readonly score: ScoreState = createScoreState();
@@ -55,6 +68,9 @@ export class TrialScene extends Phaser.Scene {
   private previous: MobileSnapshot = { left: false, right: false, jump: false, dash: false, attack: false };
   private runStartedAt = 0;
   private checkpointX = 75;
+  private nextEndlessCheckpointX = WORLD_WIDTH + 80;
+  private generatedChunkCount = 0;
+  private worldEndX = WORLD_WIDTH;
   private deaths = 0;
   private coyoteUntil = 0;
   private jumpBufferUntil = 0;
@@ -62,13 +78,11 @@ export class TrialScene extends Phaser.Scene {
   private nextDashAt = 0;
   private invulnerableUntil = 0;
   private facing = 1;
-  private currentZone = 0;
   private hudAt = 0;
   private respawning = false;
   private finished = false;
   private attackUntil = 0;
   private attackVisual?: Phaser.GameObjects.Rectangle;
-  private finishLine!: Phaser.GameObjects.Rectangle;
   private wasAirborne = false;
   private landingUntil = 0;
 
@@ -104,7 +118,7 @@ export class TrialScene extends Phaser.Scene {
     for (const zone of ZONES) {
       for (const platform of zone.platforms) {
         const height = platform.height ?? 60;
-        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 1)
+        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 0.24)
           .setStrokeStyle(2, 0x1ee7ff, 0.8);
         this.platforms.add(tile);
         const body = tile.body as Phaser.Physics.Arcade.StaticBody;
@@ -132,8 +146,7 @@ export class TrialScene extends Phaser.Scene {
       this.addCheckpoint(zone.checkpoint);
     }
 
-    this.finishLine = this.add.rectangle(4_130, 390, 8, 210, 0x7c4dff).setStrokeStyle(2, 0xb89bff);
-    this.add.text(4_080, 260, "FINISH", { fontFamily: "monospace", fontSize: "18px", color: "#c6b2ff" });
+    this.add.text(4_040, 260, "ENDLESS / KEEP RUNNING", { fontFamily: "monospace", fontSize: "18px", color: "#c6b2ff" });
     this.player = this.add.rectangle(75, 458, 28, 40, 0xf3fbff, 0).setVisible(false);
     this.physics.add.existing(this.player);
     this.body = this.player.body as Phaser.Physics.Arcade.Body;
@@ -161,18 +174,111 @@ export class TrialScene extends Phaser.Scene {
       .setDepth(-10);
   }
 
-  private addHazard(x: number, y: number, width: number, height: number, kind: string) {
+  private addHazard(x: number, y: number, width: number, height: number, kind: string, segment?: GeneratedSegment, difficulty = 0) {
     const color = kind === "laser" ? 0xff326f : kind === "saw" ? 0xffa648 : 0xff3968;
     const shape = this.add.rectangle(x, y, width, height, color, kind === "laser" ? 0.72 : 0.95)
       .setStrokeStyle(2, kind === "laser" ? 0xffa2c0 : 0xffd0db);
     const ring = kind === "saw" ? this.add.circle(x, y, Math.min(width, height) / 2 + 5, 0x39172a).setStrokeStyle(2, 0xff7853) : undefined;
-    this.hazards.push({ shape, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind });
+    const hazard = {
+      shape, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
+      period: Math.max(260, 420 - difficulty * 18), amplitude: Math.min(75 + difficulty * 5, 110),
+    };
+    this.hazards.push(hazard);
+    if (segment) {
+      segment.hazards.push(hazard);
+      segment.objects.push(shape);
+      if (ring) segment.objects.push(ring);
+    }
   }
 
-  private addCheckpoint(x: number) {
-    this.add.rectangle(x, 425, 8, 100, 0x243448).setStrokeStyle(2, 0x8c69ff, 0.8);
+  private addCheckpoint(x: number, objects?: Phaser.GameObjects.GameObject[]) {
+    const post = this.add.rectangle(x, 425, 8, 100, 0x243448).setStrokeStyle(2, 0x8c69ff, 0.8);
     const flag = this.add.triangle(x + 13, 385, 0, 0, 25, 12, 0, 24, 0x725cff).setOrigin(0, 0.5);
     this.checkpointFlags.push(flag);
+    objects?.push(post, flag);
+    return flag;
+  }
+
+  private ensureWorldAhead() {
+    while (this.player.x + CHUNK_AHEAD * VIEW_WIDTH >= WORLD_WIDTH + this.generatedChunkCount * SEGMENT_LENGTH) {
+      this.addEndlessSegment(this.generatedChunkCount);
+      this.generatedChunkCount += 1;
+    }
+
+    const cameraLeft = this.cameras.main.worldView.x;
+    for (let index = this.generatedSegments.length - 1; index >= 0; index -= 1) {
+      const segment = this.generatedSegments[index];
+      if (segment.end >= this.checkpointX - SEGMENT_LENGTH || segment.renderEnd >= cameraLeft - 200) continue;
+      for (const platform of segment.platforms) this.platforms.remove(platform, true, true);
+      for (const hazard of segment.hazards) {
+        const hazardIndex = this.hazards.indexOf(hazard);
+        if (hazardIndex >= 0) this.hazards.splice(hazardIndex, 1);
+      }
+      for (const object of segment.objects) {
+        if (segment.platforms.includes(object as Phaser.GameObjects.Rectangle)) continue;
+        if (object.scene) object.destroy();
+      }
+      const flagIndex = segment.checkpoint ? this.checkpointFlags.indexOf(segment.checkpoint) : -1;
+      if (flagIndex >= 0) this.checkpointFlags.splice(flagIndex, 1);
+      this.generatedSegments.splice(index, 1);
+    }
+  }
+
+  private addEndlessSegment(index: number) {
+    const start = WORLD_WIDTH + index * SEGMENT_LENGTH;
+    const end = start + SEGMENT_LENGTH;
+    const difficulty = Math.floor(index / 2);
+    const gap = Math.min(55 + difficulty * 8, 115);
+    const platformWidth = (SEGMENT_LENGTH - 40 - gap * 2) / 3;
+    const segment: GeneratedSegment = {
+      start,
+      end,
+      renderEnd: end,
+      checkpointX: start + 80,
+      platforms: [],
+      objects: [],
+      hazards: [],
+    };
+
+    if (index % 4 === 0) {
+      const panoramaIndex = Math.floor(index / 4);
+      const panoramaStart = WORLD_WIDTH + panoramaIndex * WORLD_WIDTH;
+      const backdrop = this.add.image(panoramaStart + WORLD_WIDTH / 2, VIEW_HEIGHT / 2, SCENERY_TEXTURE)
+        .setDisplaySize(WORLD_WIDTH, VIEW_HEIGHT)
+        .setDepth(-10);
+      segment.objects.push(backdrop);
+      segment.renderEnd = panoramaStart + WORLD_WIDTH;
+    }
+
+    const centers: number[] = [];
+    let left = start + 20;
+    for (let part = 0; part < 3; part += 1) {
+      const center = left + platformWidth / 2;
+      centers.push(center);
+      const platform = this.add.rectangle(center, 510, platformWidth, 60, 0x102134, 0.36)
+        .setStrokeStyle(2, 0x1ee7ff, 0.88);
+      this.platforms.add(platform);
+      (platform.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      const glow = this.add.rectangle(center, 480, platformWidth, 4, 0x28f0ff, 0.85);
+      segment.platforms.push(platform);
+      segment.objects.push(platform, glow);
+      left += platformWidth + gap;
+    }
+
+    const hazardCount = Math.min(1 + Math.floor(index / 2), 6);
+    for (let obstacle = 0; obstacle < hazardCount; obstacle += 1) {
+      const platformIndex = obstacle % centers.length;
+      const slot = Math.floor(obstacle / centers.length);
+      const x = centers[platformIndex] + (slot % 2 === 0 ? -1 : 1) * platformWidth * 0.18;
+      const kind = difficulty >= 5 && obstacle % 3 === 2 ? "laser" : difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
+      this.addHazard(x, kind === "laser" ? 425 : 465, kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
+    }
+
+    segment.checkpoint = this.addCheckpoint(segment.checkpointX, segment.objects);
+    this.generatedSegments.push(segment);
+    this.worldEndX = end + CHUNK_AHEAD * VIEW_WIDTH;
+    this.physics.world.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT + 1_200);
+    this.cameras.main.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT);
   }
 
   private collect(crystal: Phaser.GameObjects.Image) {
@@ -185,6 +291,7 @@ export class TrialScene extends Phaser.Scene {
 
   update(time: number) {
     if (this.finished || this.respawning) return;
+    this.ensureWorldAhead();
     const keyboard = this.keys;
     const mobile = this.controls.snapshot();
     const input = {
@@ -242,13 +349,22 @@ export class TrialScene extends Phaser.Scene {
     if (justPressed("attack")) this.startAttack(time);
     this.updateAttack(time);
     this.updateHazards(time);
+    if (this.respawning || this.finished) {
+      this.previous = input;
+      return;
+    }
     this.updateTargets();
+    if (this.respawning || this.finished) {
+      this.previous = input;
+      return;
+    }
     this.updateProgress();
-    if (this.player.x >= this.finishLine.x) this.complete();
-    if (this.player.y > VIEW_HEIGHT + 60) this.die();
+    if (this.player.y > VIEW_HEIGHT + 60) {
+      this.die();
+      this.previous = input;
+      return;
+    }
 
-    const current = this.player.x < 1_000 ? 0 : this.player.x < 2_000 ? 1 : this.player.x < 3_000 ? 2 : 3;
-    this.currentZone = current;
     this.updatePlayerArt(time, grounded, direction, input.down);
     this.playerArt.setTint(time < this.invulnerableUntil ? 0x62ffb3 : 0xffffff);
     if (time >= this.hudAt) this.emitHud();
@@ -270,7 +386,7 @@ export class TrialScene extends Phaser.Scene {
 
   private updateHazards(time: number) {
     for (const hazard of this.hazards) {
-      if (hazard.moving) hazard.shape.x = hazard.baseX + Math.sin(time / 420 + hazard.phase) * 75;
+      if (hazard.moving) hazard.shape.x = hazard.baseX + Math.sin(time / hazard.period + hazard.phase) * hazard.amplitude;
       if (hazard.kind === "laser") {
         const active = Math.floor((time + hazard.phase * 200) / 1_000) % 2 === 0;
         hazard.shape.setAlpha(active ? 0.82 : 0.12);
@@ -335,6 +451,14 @@ export class TrialScene extends Phaser.Scene {
         this.emitHud();
       }
     }
+    while (this.player.x >= this.nextEndlessCheckpointX) {
+      this.checkpointX = this.nextEndlessCheckpointX;
+      const segment = this.generatedSegments.find((item) => item.checkpointX === this.checkpointX);
+      segment?.checkpoint?.setFillStyle(0x43e7f5);
+      this.nextEndlessCheckpointX += SEGMENT_LENGTH;
+      this.audio.play("checkpoint");
+      this.emitHud();
+    }
   }
 
   private die() {
@@ -346,6 +470,20 @@ export class TrialScene extends Phaser.Scene {
     this.award("death", `death:${this.deaths}`);
     this.controls.releaseAll();
     this.playerArt.setAlpha(0.55);
+    this.emitHud();
+    if (this.deaths >= STARTING_LIVES) {
+      this.finished = true;
+      this.physics.pause();
+      this.onResult({
+        ...this.hud(),
+        completed: true,
+        elapsedMs: Math.max(0, Math.floor(performance.now() - this.runStartedAt)),
+        gameVersion: GAME_VERSION,
+        events: [...this.scoreEvents],
+        zonesCompleted: Math.floor(this.player.x / SEGMENT_LENGTH),
+      });
+      return;
+    }
     this.time.delayedCall(420, () => {
       this.player.setPosition(this.checkpointX, 458).setAlpha(1);
       this.body.setVelocity(0, 0);
@@ -356,18 +494,6 @@ export class TrialScene extends Phaser.Scene {
       this.respawning = false;
       this.emitHud();
     });
-  }
-
-  private complete() {
-    if (this.finished) return;
-    this.finished = true;
-    this.audio.play("complete");
-    this.audio.haptic([35, 35, 80]);
-    this.award("zone", "zone:3");
-    this.award("finish", "finish:complete");
-    this.physics.pause();
-    this.controls.releaseAll();
-    this.onResult({ ...this.hud(), completed: true, elapsedMs: Math.max(0, Math.round(performance.now() - this.runStartedAt)), gameVersion: GAME_VERSION, events: [...this.scoreEvents], zonesCompleted: 4 });
   }
 
   private award(event: ScoreEvent, key: string) {
@@ -381,12 +507,17 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private hud(): TrialHud {
+    const distance = Math.max(0, Math.floor(this.player?.x ?? 0));
+    const elapsedSeconds = Math.floor(Math.max(0, performance.now() - this.runStartedAt) / 1_000);
     return {
-      score: this.score.value,
-      zone: this.currentZone + 1,
+      score: this.score.value + elapsedSeconds * SURVIVAL_SCORE_PER_SECOND,
+      zone: Math.floor(distance / SEGMENT_LENGTH) + 1,
       deaths: this.deaths,
+      lives: Math.max(0, STARTING_LIVES - this.deaths),
+      distance,
       dashReady: this.time.now >= this.nextDashAt,
-      checkpoint: ZONES.filter((zone) => zone.checkpoint <= this.checkpointX).length,
+      checkpoint: ZONES.filter((zone) => zone.checkpoint <= this.checkpointX).length
+        + Math.max(0, Math.floor((this.checkpointX - (WORLD_WIDTH + 80)) / SEGMENT_LENGTH) + 1),
     };
   }
 
@@ -395,4 +526,3 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
-

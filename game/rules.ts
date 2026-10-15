@@ -1,4 +1,6 @@
-export const GAME_VERSION = "neon-trial-0.1.0";
+export const GAME_VERSION = "neon-trial-0.2.0";
+export const STARTING_LIVES = 4;
+export const SURVIVAL_SCORE_PER_SECOND = 1;
 
 export const SCORE = {
   section: 100,
@@ -6,10 +8,9 @@ export const SCORE = {
   target: 50,
   zone: 250,
   death: -50,
-  finish: 1_000,
 } as const;
 
-export type ScoreEvent = "section" | "crystal" | "target" | "zone" | "death" | "finish";
+export type ScoreEvent = "section" | "crystal" | "target" | "zone" | "death";
 
 export type ScoreState = {
   value: number;
