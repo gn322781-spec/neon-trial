@@ -35,6 +35,12 @@ const CHUNK_AHEAD = 2;
 const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
 const PLAYER_ART_SCALE = 0.22;
+const PLAYER_BODY_WIDTH = 40;
+const PLAYER_BODY_HEIGHT = 66;
+const PLAYER_START_X = 75;
+const GROUND_TOP = 480;
+const PLAYER_START_Y = GROUND_TOP - PLAYER_BODY_HEIGHT / 2;
+const PLAYER_ART_FOOT_OFFSET = PLAYER_BODY_HEIGHT / 2;
 const SCENERY_TEXTURE = "neon-trial-city";
 const PICKUP_TEXTURE = "cigarette-pack";
 const PLAYER_TEXTURES = {
@@ -147,15 +153,15 @@ export class TrialScene extends Phaser.Scene {
     }
 
     this.add.text(4_040, 260, "ENDLESS / KEEP RUNNING", { fontFamily: "monospace", fontSize: "18px", color: "#c6b2ff" });
-    this.player = this.add.rectangle(75, 458, 28, 40, 0xf3fbff, 0).setVisible(false);
+    this.player = this.add.rectangle(PLAYER_START_X, PLAYER_START_Y, 28, 40, 0xf3fbff, 0).setVisible(false);
     this.physics.add.existing(this.player);
     this.body = this.player.body as Phaser.Physics.Arcade.Body;
-    this.body.setSize(40, 66);
+    this.body.setSize(PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT);
     this.body.setCollideWorldBounds(true);
     this.body.setGravityY(PHYSICS.gravity);
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.overlap(this.player, this.crystals, (_player, crystal) => this.collect(crystal as Phaser.GameObjects.Image), undefined, this);
-    this.playerArt = this.add.image(75, 476, PLAYER_TEXTURES.idle)
+    this.playerArt = this.add.image(PLAYER_START_X, GROUND_TOP, PLAYER_TEXTURES.idle)
       .setOrigin(0.5, 1).setScale(PLAYER_ART_SCALE).setDepth(2);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.08, -250, 0);
     this.cameras.main.setDeadzone(300, 130);
@@ -380,7 +386,7 @@ export class TrialScene extends Phaser.Scene {
     else if (direction) texture = Math.floor(time / 150) % 2 === 0 ? PLAYER_TEXTURES.walkOne : PLAYER_TEXTURES.walkTwo;
 
     if (this.playerArt.texture.key !== texture) this.playerArt.setTexture(texture);
-    this.playerArt.setPosition(this.player.x, this.player.y + 18).setFlipX(this.facing < 0);
+    this.playerArt.setPosition(this.player.x, this.player.y + PLAYER_ART_FOOT_OFFSET).setFlipX(this.facing < 0);
     this.playerArt.setAlpha(this.respawning ? 0.55 : 1);
   }
 
@@ -485,10 +491,10 @@ export class TrialScene extends Phaser.Scene {
       return;
     }
     this.time.delayedCall(420, () => {
-      this.player.setPosition(this.checkpointX, 458).setAlpha(1);
+      this.player.setPosition(this.checkpointX, PLAYER_START_Y).setAlpha(1);
       this.body.setVelocity(0, 0);
       this.body.setAllowGravity(true);
-      this.playerArt.setPosition(this.player.x, this.player.y + 18).setTexture(PLAYER_TEXTURES.idle).setAlpha(1);
+      this.playerArt.setPosition(this.player.x, this.player.y + PLAYER_ART_FOOT_OFFSET).setTexture(PLAYER_TEXTURES.idle).setAlpha(1);
       this.invulnerableUntil = this.time.now + 1_050;
       this.nextDashAt = this.time.now;
       this.respawning = false;
