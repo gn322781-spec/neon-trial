@@ -118,3 +118,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   .play-screen { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }.game-topbar { min-height: 40px; padding-block: 2px; }.game-stage { max-height: none; }.touch-controls { bottom: clamp(30px, 5%, 42px); }.touch-button { width: 50px; height: 50px; }.touch-button.jump { width: 54px; height: 54px; }.game-hint { min-height: 22px; gap: 11px; padding: 3px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
+
+.touch-button.icon-action { position: relative; overflow: hidden; border: 0; background: transparent; box-shadow: none; }
+.touch-button.icon-action:active { background: transparent; }
+.touch-icon, .touch-icon img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.touch-icon { pointer-events: none; }
+.touch-icon img { object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.touch-icon img + img { opacity: 0; }
+.touch-button.icon-action:active .touch-icon img:first-child { opacity: 0; }
+.touch-button.icon-action:active .touch-icon img + img { opacity: 1; }
