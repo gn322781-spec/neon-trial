@@ -271,11 +271,13 @@ export class TrialScene extends Phaser.Scene {
       left += platformWidth + gap;
     }
 
-    const hazardCount = Math.min(1 + Math.floor(index / 2), 6);
+    const hazardCount = Math.min(3 + Math.floor(index / 2), 6);
     for (let obstacle = 0; obstacle < hazardCount; obstacle += 1) {
       const platformIndex = obstacle % centers.length;
       const slot = Math.floor(obstacle / centers.length);
-      const x = centers[platformIndex] + (slot % 2 === 0 ? -1 : 1) * platformWidth * 0.18;
+      const firstSlotSide = platformIndex === 0 ? 1 : -1;
+      const side = slot % 2 === 0 ? firstSlotSide : -firstSlotSide;
+      const x = centers[platformIndex] + side * platformWidth * 0.28;
       const kind = difficulty >= 5 && obstacle % 3 === 2 ? "laser" : difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
       this.addHazard(x, kind === "laser" ? 425 : 465, kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
     }
@@ -532,3 +534,4 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
+
