@@ -130,7 +130,7 @@ const MOTORCYCLE_RIDE_DURATION = 10_000;
 const MOTORCYCLE_MOUNT_DURATION = 650;
 const MOTORCYCLE_SPEED_MULTIPLIER = 1.45;
 const ENEMY_FRAME_SIZE = 150;
-const ENEMY_TARGET_VISIBLE_HEIGHT = 104;
+const ENEMY_TARGET_VISIBLE_HEIGHT = 82;
 const ENEMY_VISIBLE_FRAME_BOUNDS: Record<EnemyKind, { height: number; bottom: number }> = {
   goblin: { height: 36, bottom: 100 },
   mushroom: { height: 37, bottom: 100 },
