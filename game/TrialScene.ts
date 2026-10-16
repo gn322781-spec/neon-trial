@@ -10,7 +10,7 @@ export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: n
 export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameVersion: string; events: AttemptEvent[]; zonesCompleted: number };
 
 type MobileSnapshot = ReturnType<Controls["snapshot"]>;
-type DamageHazard = { shape: Phaser.GameObjects.Rectangle; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
+type DamageHazard = { shape: Phaser.GameObjects.Rectangle; visual?: Phaser.GameObjects.Sprite; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
 type EnemyState = "patrol" | "approach" | "attack" | "hit" | "dying";
 type EnemyUnit = {
   id: string;
@@ -122,6 +122,10 @@ const PLAYER_ART_GROUNDING_OVERLAP = 2;
 const MOTORCYCLE_TEXTURE = "green-motorcycle";
 const MOTORCYCLE_MOUNT_TEXTURE = "motorcycle-mount";
 const MOTORCYCLE_RIDING_TEXTURE = "motorcycle-riding";
+const HAZARD_SMOKE_ORB_SHEET = "hazard-smoke-orb-sheet";
+const HAZARD_SMOKE_WALL_SHEET = "hazard-smoke-wall-sheet";
+const HAZARD_SMOKE_ORB_ANIMATION = "hazard-smoke-orb";
+const HAZARD_SMOKE_WALL_ANIMATION = "hazard-smoke-wall";
 const GAME_EFFECTS = [
   { key: "fx-attack-impact", path: "/effects/gigapack/directional_impact_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 7 },
   { key: "fx-player-impact", path: "/effects/gigapack/symmetrical_impact_001_small_yellow.png", frameWidth: 48, frameHeight: 48, frameCount: 7 },
@@ -233,6 +237,8 @@ export class TrialScene extends Phaser.Scene {
 
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
+    this.load.spritesheet(HAZARD_SMOKE_ORB_SHEET, "/obstacles/smoke-orb-sheet.png", { frameWidth: 512, frameHeight: 512 });
+    this.load.spritesheet(HAZARD_SMOKE_WALL_SHEET, "/obstacles/purple-smoke-wall-sheet.png", { frameWidth: 384, frameHeight: 1024 });
     for (const effect of GAME_EFFECTS) {
       this.load.spritesheet(effect.key, effect.path, { frameWidth: effect.frameWidth, frameHeight: effect.frameHeight });
     }
@@ -373,6 +379,19 @@ export class TrialScene extends Phaser.Scene {
         repeat: 0,
       });
     }
+    const loopingHazards = [
+      { key: HAZARD_SMOKE_ORB_ANIMATION, sheet: HAZARD_SMOKE_ORB_SHEET, frameCount: 6 },
+      { key: HAZARD_SMOKE_WALL_ANIMATION, sheet: HAZARD_SMOKE_WALL_SHEET, frameCount: 4 },
+    ] as const;
+    for (const effect of loopingHazards) {
+      if (this.anims.exists(effect.key)) continue;
+      this.anims.create({
+        key: effect.key,
+        frames: this.anims.generateFrameNumbers(effect.sheet, { start: 0, end: effect.frameCount - 1 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
   }
 
   private playEffect(key: string, x: number, y: number, width: number, height = width, flipX = false) {
@@ -495,15 +514,32 @@ export class TrialScene extends Phaser.Scene {
     const color = kind === "laser" ? 0xff326f : kind === "saw" ? 0xffa648 : 0xff3968;
     const shape = this.add.rectangle(x, y, width, height, color, kind === "laser" ? 0.72 : 0.95)
       .setStrokeStyle(2, kind === "laser" ? 0xffa2c0 : 0xffd0db);
+    let visual: Phaser.GameObjects.Sprite | undefined;
+    if (kind === "spike") {
+      const orbSize = Math.max(width, height) + 14;
+      visual = this.add.sprite(x, y + height / 2 - orbSize / 2, HAZARD_SMOKE_ORB_SHEET)
+        .setDisplaySize(orbSize, orbSize)
+        .setDepth(1)
+        .play(HAZARD_SMOKE_ORB_ANIMATION);
+      shape.setVisible(false);
+    } else if (kind === "laser") {
+      const wallHeight = height + 10;
+      visual = this.add.sprite(x, y, HAZARD_SMOKE_WALL_SHEET)
+        .setDisplaySize(wallHeight * 384 / 1024, wallHeight)
+        .setDepth(1)
+        .play(HAZARD_SMOKE_WALL_ANIMATION);
+      shape.setVisible(false);
+    }
     const ring = kind === "saw" ? this.add.circle(x, y, Math.min(width, height) / 2 + 5, 0x39172a).setStrokeStyle(2, 0xff7853) : undefined;
     const hazard = {
-      shape, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
+      shape, visual, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
       period: Math.max(260, 420 - difficulty * 18), amplitude: Math.min(75 + difficulty * 5, 110),
     };
     this.hazards.push(hazard);
     if (segment) {
       segment.hazards.push(hazard);
       segment.objects.push(shape);
+      if (visual) segment.objects.push(visual);
       if (ring) segment.objects.push(ring);
     }
   }
@@ -853,10 +889,12 @@ export class TrialScene extends Phaser.Scene {
   private updateHazards(time: number) {
     for (const hazard of this.hazards) {
       if (hazard.moving) hazard.shape.x = hazard.baseX + Math.sin(time / hazard.period + hazard.phase) * hazard.amplitude;
+      if (hazard.visual) hazard.visual.x = hazard.shape.x;
       if (hazard.kind === "laser") {
         const active = Math.floor((time + hazard.phase * 200) / 1_000) % 2 === 0;
         hazard.shape.setAlpha(active ? 0.82 : 0.12);
         hazard.shape.setData("active", active);
+        hazard.visual?.setAlpha(active ? 1 : 0.2);
       }
       if (hazard.ring) hazard.ring.x = hazard.shape.x;
       if (time > this.invulnerableUntil && this.rectanglesOverlap(this.player, hazard.shape) && (hazard.kind !== "laser" || hazard.shape.getData("active"))) {
