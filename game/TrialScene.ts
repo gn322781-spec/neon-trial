@@ -63,22 +63,28 @@ const PLAYER_START_Y = GROUND_TOP - PLAYER_BODY_HEIGHT / 2;
 const PLAYER_ART_FOOT_OFFSET = PLAYER_BODY_HEIGHT / 2;
 const PICKUP_TEXTURE = "cigarette-pack";
 const BACKGROUND_LAYERS = [
-  { key: "cave-color", path: "/cave/7.png", parallax: 0.005, depth: -32, alpha: 1 },
-  { key: "cave-backdrop", path: "/cave/0.png", parallax: 0.012, depth: -30, alpha: 1 },
-  { key: "cave-foreground", path: "/cave/6.png", parallax: 0.08, depth: -28, alpha: 0.78 },
-  { key: "cave-overhangs", path: "/cave/5.png", parallax: 0.13, depth: -26, alpha: 0.74 },
-  { key: "cave-pillars", path: "/cave/4.png", parallax: 0.18, depth: -24, alpha: 0.72 },
-  { key: "cave-columns", path: "/cave/3.png", parallax: 0.23, depth: -22, alpha: 0.72 },
-  { key: "cave-rubble", path: "/cave/2.png", parallax: 0.28, depth: -20, alpha: 0.88 },
-  { key: "cave-edges", path: "/cave/1.png", parallax: 0.34, depth: -18, alpha: 0.9 },
+  { key: "forest-sky", path: "/forest/layers/sky.png", parallax: 0.002, depth: -40, alpha: 1 },
+  { key: "forest-stars-back", path: "/forest/layers/particles-2.png", parallax: 0.008, depth: -39, alpha: 1 },
+  { key: "forest-stars-front", path: "/forest/layers/particles-1.png", parallax: 0.025, depth: -38, alpha: 1 },
+  { key: "forest-mountain-ridge", path: "/forest/layers/mountain-ridge.png", parallax: 0.035, depth: -36, alpha: 1 },
+  { key: "forest-mountain-walls", path: "/forest/layers/mountain-walls.png", parallax: 0.05, depth: -35, alpha: 1 },
+  { key: "forest-mountain-peak", path: "/forest/layers/mountain-peak.png", parallax: 0.075, depth: -34, alpha: 1 },
+  { key: "forest-tree-5", path: "/forest/layers/tree-5.png", parallax: 0.1, depth: -31, alpha: 1 },
+  { key: "forest-tree-4", path: "/forest/layers/tree-4.png", parallax: 0.12, depth: -30, alpha: 1 },
+  { key: "forest-tree-3", path: "/forest/layers/tree-3.png", parallax: 0.15, depth: -29, alpha: 1 },
+  { key: "forest-tree-2", path: "/forest/layers/tree-2.png", parallax: 0.18, depth: -28, alpha: 1 },
+  { key: "forest-tree-1", path: "/forest/layers/tree-1.png", parallax: 0.21, depth: -27, alpha: 1 },
+  { key: "forest-vegetation-3", path: "/forest/layers/vegetation-3.png", parallax: 0.22, depth: -25, alpha: 1 },
+  { key: "forest-vegetation-2", path: "/forest/layers/vegetation-2.png", parallax: 0.25, depth: -24, alpha: 1 },
+  { key: "forest-vegetation-1", path: "/forest/layers/vegetation-1.png", parallax: 0.28, depth: -23, alpha: 1 },
+  { key: "forest-color-filter", path: "/forest/layers/color-filter.png", parallax: 0, depth: -22, alpha: 1 },
 ] as const;
 const ISLAND_PLATFORMS = [
-  { key: "space-island-1", surface: 0.46 },
-  { key: "space-island-2", surface: 0.012 },
-  { key: "space-island-3", surface: 0.288 },
-  { key: "space-island-6", surface: 0.342 },
+  { key: "forest-island-1", surface: 0.01 },
+  { key: "forest-island-2", surface: 0.745 },
+  { key: "forest-island-3", surface: 0.01 },
 ] as const;
-const ISLAND_SET_PIECES = ["space-island-4", "space-island-5"] as const;
+const ISLAND_SET_PIECES = ["forest-island-1", "forest-island-3"] as const;
 const PLAYER_TEXTURES = {
   idle: "player-idle",
   walkOne: "player-walk-one",
@@ -167,10 +173,8 @@ export class TrialScene extends Phaser.Scene {
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
     for (let index = 0; index < ISLAND_PLATFORMS.length; index += 1) {
-      this.load.image(ISLAND_PLATFORMS[index].key, `/space/island-${index === 3 ? 6 : index + 1}.webp`);
+      this.load.image(ISLAND_PLATFORMS[index].key, `/forest/island-${index + 1}.png`);
     }
-    this.load.image(ISLAND_SET_PIECES[0], "/space/island-4.webp");
-    this.load.image(ISLAND_SET_PIECES[1], "/space/island-5.webp");
     this.load.image(PICKUP_TEXTURE, "/items/cigarette-pack.webp");
     this.load.image(PLAYER_TEXTURES.idle, "/character/01_parado_idle.png");
     this.load.image(PLAYER_TEXTURES.walkOne, "/character/02_andando_passada_1.png");
@@ -312,7 +316,7 @@ export class TrialScene extends Phaser.Scene {
     for (const layer of BACKGROUND_LAYERS) {
       const sprite = this.add.tileSprite(this.viewWidth / 2, VIEW_HEIGHT / 2, this.viewWidth, VIEW_HEIGHT, layer.key)
         .setOrigin(0.5)
-        .setTileScale(Math.max(this.viewWidth / 384, VIEW_HEIGHT / 216))
+        .setTileScale(Math.max(this.viewWidth / 2_000, VIEW_HEIGHT / 400))
         .setScrollFactor(0)
         .setAlpha(layer.alpha)
         .setDepth(layer.depth);
