@@ -57,8 +57,7 @@ const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
 const PLAYER_ART_SCALE = 0.22;
 const PLAYER_ART_HEIGHT = 510 * PLAYER_ART_SCALE;
-const PLAYER_ATTACK_FRAME_INTERVAL_MS = 60;
-const PLAYER_ATTACK_DURATION_MS = PLAYER_ATTACK_FRAME_INTERVAL_MS * 7;
+const PLAYER_ATTACK_DURATION_MS = 180;
 const PLAYER_BODY_WIDTH = 40;
 const PLAYER_BODY_HEIGHT = 66;
 const PLAYER_START_X = 75;
@@ -227,7 +226,7 @@ export class TrialScene extends Phaser.Scene {
   private respawning = false;
   private finished = false;
   private attackUntil = 0;
-  private attackStartedAt = 0;
+  private attackFrameIndex = -1;
   private wasAirborne = false;
   private landingUntil = 0;
   private viewWidth = VIEW_WIDTH;
@@ -810,11 +809,7 @@ export class TrialScene extends Phaser.Scene {
       texture = MOTORCYCLE_RIDING_TEXTURE;
     } else if (time < this.dashUntil) texture = PLAYER_TEXTURES.dash;
     else if (time < this.attackUntil) {
-      const frameIndex = Math.min(
-        PLAYER_ATTACK_TEXTURES.length - 1,
-        Math.floor((time - this.attackStartedAt) / PLAYER_ATTACK_FRAME_INTERVAL_MS),
-      );
-      texture = PLAYER_ATTACK_TEXTURES[frameIndex];
+      texture = PLAYER_ATTACK_TEXTURES[this.attackFrameIndex];
     } else if (grounded && crouching) texture = PLAYER_TEXTURES.crouch;
     else if (grounded && time < this.landingUntil) texture = PLAYER_TEXTURES.landing;
     else if (!grounded) texture = this.body.velocity.y < 0 ? PLAYER_TEXTURES.jumpRise : PLAYER_TEXTURES.jumpAir;
@@ -979,7 +974,7 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private startAttack(time: number) {
-    this.attackStartedAt = time;
+    this.attackFrameIndex = (this.attackFrameIndex + 1) % PLAYER_ATTACK_TEXTURES.length;
     this.attackUntil = time + PLAYER_ATTACK_DURATION_MS;
     this.audio.play("attack");
     for (const enemy of this.enemies) {
