@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const client = createPublicServerClient();
   if (!client) return NextResponse.json({ code: "supabase_unconfigured" }, { status: 503 });
   try {
-    const pageSize = 10;
+    const pageSize = 7;
     const { data, error } = await client.rpc("rank_page", { p_offset: page * pageSize, p_limit: pageSize + 1 });
     if (error) return NextResponse.json({ code: "ranking_unavailable" }, { status: 503 });
     const rows = (data ?? []) as Array<{ position: number; nickname: string; best_score: number }>;
