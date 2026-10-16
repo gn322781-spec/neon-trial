@@ -653,7 +653,7 @@ export class TrialScene extends Phaser.Scene {
     this.motorcycleMountUntil = this.time.now + MOTORCYCLE_MOUNT_DURATION;
     this.motorcycleAnimationStartedAt = this.motorcycleMountUntil;
     this.motorcycleWasMoving = false;
-    this.audio.play("crystal");
+    this.audio.play("motorcycle");
     this.playerArt.setTexture(MOTORCYCLE_MOUNT_TEXTURE)
       .setOrigin(0.5, 1)
       .setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height)
