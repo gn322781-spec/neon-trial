@@ -306,7 +306,36 @@ export class TrialScene extends Phaser.Scene {
         (crystal.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
         this.tweens.add({ targets: crystal, y: pickup.y - 6, duration: 650, yoyo: true, repeat: -1, ease: "Sine.inOut" });
       }
-      for (const hazard of zone.hazards) this.addHazard(hazard.x, hazard.y, hazard.width, hazard.height, hazard.kind);
+      for (const hazard of zone.hazards) {
+        let x = hazard.x;
+        let y = hazard.y;
+        if (hazard.kind === "spike") {
+          const hazardLeft = hazard.x - hazard.width / 2;
+          const hazardRight = hazard.x + hazard.width / 2;
+          const platform = zone.platforms
+            .map((candidate) => {
+              const platformLeft = candidate.x - candidate.width / 2;
+              const platformRight = candidate.x + candidate.width / 2;
+              const gap = Math.max(platformLeft - hazardRight, hazardLeft - platformRight, 0);
+              return {
+                gap,
+                left: platformLeft,
+                right: platformRight,
+                surfaceY: candidate.y - (candidate.height ?? 60) / 2,
+                distanceFromHazard: Math.abs(candidate.y - hazard.y),
+              };
+            })
+            .sort((left, right) => left.gap - right.gap || left.distanceFromHazard - right.distanceFromHazard)[0];
+          if (platform?.gap === 0) {
+            const orbRadius = (Math.max(hazard.width, hazard.height) + 14) / 2;
+            const minX = platform.left + orbRadius;
+            const maxX = platform.right - orbRadius;
+            x = minX <= maxX ? Phaser.Math.Clamp(hazard.x, minX, maxX) : (platform.left + platform.right) / 2;
+            y = platform.surfaceY - hazard.height / 2;
+          }
+        }
+        this.addHazard(x, y, hazard.width, hazard.height, hazard.kind);
+      }
       for (const enemy of zone.enemies) {
         this.addEnemy(enemy);
       }
@@ -646,6 +675,7 @@ export class TrialScene extends Phaser.Scene {
     }
 
     const hazardCount = Math.min(3 + Math.floor(index / 2), 6);
+    let smokeOrbPlaced = false;
     for (let obstacle = 0; obstacle < hazardCount; obstacle += 1) {
       const platformIndex = obstacle % platforms.length;
       if (platformIndex === motorcyclePlatformPart) continue;
@@ -654,7 +684,9 @@ export class TrialScene extends Phaser.Scene {
       const side = slot % 2 === 0 ? firstSlotSide : -firstSlotSide;
       const platform = platforms[platformIndex];
       const x = platform.center + side * platform.width * 0.28;
-      const kind = difficulty >= 5 && obstacle % 3 === 2 ? "laser" : difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
+      const scheduledKind = difficulty >= 5 && obstacle % 3 === 2 ? "laser" : difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
+      const kind = smokeOrbPlaced ? scheduledKind : "spike";
+      if (kind === "spike") smokeOrbPlaced = true;
       const surfaceY = platform.surfaceY;
       this.addHazard(x, surfaceY - (kind === "laser" ? 55 : 15), kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
     }
