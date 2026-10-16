@@ -22,6 +22,7 @@ type GeneratedSegment = {
   objects: Phaser.GameObjects.GameObject[];
   hazards: DamageHazard[];
 };
+type BackgroundLayer = { sprite: Phaser.GameObjects.TileSprite; parallax: number };
 type Keys = {
   left: Phaser.Input.Keyboard.Key; right: Phaser.Input.Keyboard.Key; jump: Phaser.Input.Keyboard.Key;
   dash: Phaser.Input.Keyboard.Key; attack: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key;
@@ -41,8 +42,23 @@ const PLAYER_START_X = 75;
 const GROUND_TOP = 480;
 const PLAYER_START_Y = GROUND_TOP - PLAYER_BODY_HEIGHT / 2;
 const PLAYER_ART_FOOT_OFFSET = PLAYER_BODY_HEIGHT / 2;
-const SCENERY_TEXTURE = "neon-trial-city";
 const PICKUP_TEXTURE = "cigarette-pack";
+const BACKGROUND_LAYERS = [
+  { key: "space-sky", path: "/space/sky.webp", parallax: 0.01, depth: -30, alpha: 1 },
+  { key: "space-clouds", path: "/space/clouds.webp", parallax: 0.045, depth: -28, alpha: 0.82 },
+  { key: "space-far-rocks-3", path: "/space/far-rocks-3.webp", parallax: 0.09, depth: -26, alpha: 0.92 },
+  { key: "space-far-rocks-2", path: "/space/far-rocks-2.webp", parallax: 0.15, depth: -24, alpha: 0.96 },
+  { key: "space-far-rocks-1", path: "/space/far-rocks-1.webp", parallax: 0.23, depth: -22, alpha: 1 },
+  { key: "space-floating-rocks", path: "/space/floating-rocks.webp", parallax: 0.31, depth: -20, alpha: 0.9 },
+  { key: "space-particles", path: "/space/particles.webp", parallax: 0.08, depth: -18, alpha: 0.82 },
+] as const;
+const ISLAND_PLATFORMS = [
+  { key: "space-island-1", surface: 0.46 },
+  { key: "space-island-2", surface: 0.012 },
+  { key: "space-island-3", surface: 0.288 },
+  { key: "space-island-6", surface: 0.342 },
+] as const;
+const ISLAND_SET_PIECES = ["space-island-4", "space-island-5"] as const;
 const PLAYER_TEXTURES = {
   idle: "player-idle",
   walkOne: "player-walk-one",
@@ -69,6 +85,7 @@ export class TrialScene extends Phaser.Scene {
   private readonly checkpointFlags: Phaser.GameObjects.Triangle[] = [];
   private readonly score: ScoreState = createScoreState();
   private readonly scoreEvents: AttemptEvent[] = [];
+  private readonly backgroundLayers: BackgroundLayer[] = [];
   private keys!: Keys;
   private playerArt!: Phaser.GameObjects.Image;
   private previous: MobileSnapshot = { left: false, right: false, jump: false, dash: false, attack: false };
@@ -101,7 +118,12 @@ export class TrialScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image(SCENERY_TEXTURE, "/background/neon-trial-city.webp");
+    for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
+    for (let index = 0; index < ISLAND_PLATFORMS.length; index += 1) {
+      this.load.image(ISLAND_PLATFORMS[index].key, `/space/island-${index === 3 ? 6 : index + 1}.webp`);
+    }
+    this.load.image(ISLAND_SET_PIECES[0], "/space/island-4.webp");
+    this.load.image(ISLAND_SET_PIECES[1], "/space/island-5.webp");
     this.load.image(PICKUP_TEXTURE, "/items/cigarette-pack.webp");
     this.load.image(PLAYER_TEXTURES.idle, "/character/01_parado_idle.png");
     this.load.image(PLAYER_TEXTURES.walkOne, "/character/02_andando_passada_1.png");
@@ -118,18 +140,17 @@ export class TrialScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     this.cameras.main.setZoom(1);
     this.drawBackdrop();
+    this.addFloatingSetPiece(620, 52, 210, ISLAND_SET_PIECES[0]);
+    this.addFloatingSetPiece(1_900, 58, 185, ISLAND_SET_PIECES[1]);
+    this.addFloatingSetPiece(3_290, 48, 205, ISLAND_SET_PIECES[0]);
 
     this.platforms = this.physics.add.staticGroup();
     this.crystals = this.physics.add.staticGroup();
-    for (const zone of ZONES) {
-      for (const platform of zone.platforms) {
+    for (const [zoneIndex, zone] of ZONES.entries()) {
+      for (const [platformIndex, platform] of zone.platforms.entries()) {
         const height = platform.height ?? 60;
-        const tile = this.add.rectangle(platform.x, platform.y, platform.width, height, 0x102134, 1)
-          .setStrokeStyle(2, 0x1ee7ff, 0.8);
-        this.platforms.add(tile);
-        const body = tile.body as Phaser.Physics.Arcade.StaticBody;
-        body.updateFromGameObject();
-        this.add.rectangle(platform.x, platform.y - height / 2, platform.width, 4, 0x28f0ff, 0.8);
+        const variant = (zoneIndex * 2 + platformIndex) % ISLAND_PLATFORMS.length;
+        this.addIslandPlatform(platform.x, platform.y - height / 2, platform.width, height, variant);
       }
       for (const pickup of zone.crystals) {
         const crystal = this.add.image(pickup.x, pickup.y, PICKUP_TEXTURE).setDisplaySize(24, 40).setDepth(1);
@@ -175,9 +196,50 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private drawBackdrop() {
-    this.add.image(WORLD_WIDTH / 2, VIEW_HEIGHT / 2, SCENERY_TEXTURE)
-      .setDisplaySize(WORLD_WIDTH, VIEW_HEIGHT)
-      .setDepth(-10);
+    for (const layer of BACKGROUND_LAYERS) {
+      const sprite = this.add.tileSprite(VIEW_WIDTH / 2, VIEW_HEIGHT / 2, VIEW_WIDTH, VIEW_HEIGHT, layer.key)
+        .setOrigin(0.5)
+        .setTileScale(1.35)
+        .setScrollFactor(0)
+        .setAlpha(layer.alpha)
+        .setDepth(layer.depth);
+      this.backgroundLayers.push({ sprite, parallax: layer.parallax });
+    }
+  }
+
+  private updateBackdrop() {
+    const cameraX = this.cameras.main.scrollX;
+    for (const layer of this.backgroundLayers) layer.sprite.setTilePosition(cameraX * layer.parallax, 0);
+  }
+
+  private addIslandPlatform(x: number, surfaceY: number, width: number, height: number, variantIndex: number, segment?: GeneratedSegment) {
+    const variant = ISLAND_PLATFORMS[variantIndex % ISLAND_PLATFORMS.length];
+    const source = this.textures.get(variant.key).getSourceImage() as HTMLImageElement;
+    const artHeight = width * source.height / source.width;
+    const art = this.add.image(x, surfaceY - artHeight * variant.surface, variant.key)
+      .setOrigin(0.5, 0)
+      .setDisplaySize(width, artHeight)
+      .setDepth(-1);
+    const platform = this.add.rectangle(x, surfaceY + height / 2, width, height, 0x000000, 0).setVisible(false);
+    this.platforms.add(platform);
+    (platform.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+    if (segment) {
+      segment.platforms.push(platform);
+      segment.objects.push(platform, art);
+    }
+    return platform;
+  }
+
+  private addFloatingSetPiece(x: number, topY: number, width: number, texture: typeof ISLAND_SET_PIECES[number], objects?: Phaser.GameObjects.GameObject[]) {
+    const source = this.textures.get(texture).getSourceImage() as HTMLImageElement;
+    const height = width * source.height / source.width;
+    const image = this.add.image(x, topY, texture)
+      .setOrigin(0.5, 0)
+      .setDisplaySize(width, height)
+      .setDepth(-4)
+      .setAlpha(0.92);
+    objects?.push(image);
+    return image;
   }
 
   private addHazard(x: number, y: number, width: number, height: number, kind: string, segment?: GeneratedSegment, difficulty = 0) {
@@ -246,40 +308,38 @@ export class TrialScene extends Phaser.Scene {
       hazards: [],
     };
 
-    if (index % 4 === 0) {
-      const panoramaIndex = Math.floor(index / 4);
-      const panoramaStart = WORLD_WIDTH + panoramaIndex * WORLD_WIDTH;
-      const backdrop = this.add.image(panoramaStart + WORLD_WIDTH / 2, VIEW_HEIGHT / 2, SCENERY_TEXTURE)
-        .setDisplaySize(WORLD_WIDTH, VIEW_HEIGHT)
-        .setDepth(-10);
-      segment.objects.push(backdrop);
-      segment.renderEnd = panoramaStart + WORLD_WIDTH;
+    if (index % 2 === 0) {
+      const texture = ISLAND_SET_PIECES[index % ISLAND_SET_PIECES.length];
+      this.addFloatingSetPiece(start + 500, 48 + (index % 3) * 14, 185 + (index % 2) * 20, texture, segment.objects);
     }
 
-    const centers: number[] = [];
+    const platforms: Array<{ center: number; surfaceY: number }> = [];
+    const heights = [
+      [480, 430, 455],
+      [450, 480, 425],
+      [480, 435, 470],
+      [455, 480, 430],
+    ][index % 4];
     let left = start + 20;
     for (let part = 0; part < 3; part += 1) {
       const center = left + platformWidth / 2;
-      centers.push(center);
-      const platform = this.add.rectangle(center, 510, platformWidth, 60, 0x102134, 1)
-        .setStrokeStyle(2, 0x1ee7ff, 0.88);
-      this.platforms.add(platform);
-      (platform.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
-      const glow = this.add.rectangle(center, 480, platformWidth, 4, 0x28f0ff, 0.85);
-      segment.platforms.push(platform);
-      segment.objects.push(platform, glow);
+      const surfaceY = heights[part];
+      const variant = (index + part * 3) % ISLAND_PLATFORMS.length;
+      this.addIslandPlatform(center, surfaceY, platformWidth, 60, variant, segment);
+      platforms.push({ center, surfaceY });
       left += platformWidth + gap;
     }
 
     const hazardCount = Math.min(3 + Math.floor(index / 2), 6);
     for (let obstacle = 0; obstacle < hazardCount; obstacle += 1) {
-      const platformIndex = obstacle % centers.length;
-      const slot = Math.floor(obstacle / centers.length);
+      const platformIndex = obstacle % platforms.length;
+      const slot = Math.floor(obstacle / platforms.length);
       const firstSlotSide = platformIndex === 0 ? 1 : -1;
       const side = slot % 2 === 0 ? firstSlotSide : -firstSlotSide;
-      const x = centers[platformIndex] + side * platformWidth * 0.28;
+      const x = platforms[platformIndex].center + side * platformWidth * 0.28;
       const kind = difficulty >= 5 && obstacle % 3 === 2 ? "laser" : difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
-      this.addHazard(x, kind === "laser" ? 425 : 465, kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
+      const surfaceY = platforms[platformIndex].surfaceY;
+      this.addHazard(x, surfaceY - (kind === "laser" ? 55 : 15), kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
     }
 
     segment.checkpoint = this.addCheckpoint(segment.checkpointX, segment.objects);
@@ -299,6 +359,7 @@ export class TrialScene extends Phaser.Scene {
 
   update(time: number) {
     if (this.finished || this.respawning) return;
+    this.updateBackdrop();
     this.ensureWorldAhead();
     const keyboard = this.keys;
     const mobile = this.controls.snapshot();
@@ -534,4 +595,3 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
-
