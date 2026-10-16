@@ -12,6 +12,7 @@ export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameV
 type MobileSnapshot = ReturnType<Controls["snapshot"]>;
 type DamageHazard = { shape: Phaser.GameObjects.Rectangle; visual: Phaser.GameObjects.Sprite };
 type EnemyState = "hover" | "approach" | "attack" | "hit" | "dying";
+type EnemyProjectile = { sprite: Phaser.GameObjects.Image; velocityX: number; velocityY: number; expiresAt: number };
 type EnemyUnit = {
   id: string;
   kind: EnemyKind;
@@ -163,8 +164,11 @@ const ENEMY_FRAME_HEIGHT = 71;
 const ENEMY_TARGET_VISIBLE_HEIGHT = 82;
 const ENEMY_VISIBLE_FRAME_HEIGHT = 60;
 const ENEMY_KINDS: readonly EnemyKind[] = ["flying-demon"];
-const ENEMY_ATTACK_RANGE: Record<EnemyKind, number> = { "flying-demon": 104 };
+const ENEMY_ATTACK_RANGE: Record<EnemyKind, number> = { "flying-demon": 420 };
 const ENEMY_MOVE_SPEED: Record<EnemyKind, number> = { "flying-demon": 128 };
+const ENEMY_PROJECTILE_TEXTURE = "monster-flying-demon-projectile";
+const ENEMY_PROJECTILE_SPEED = 280;
+const ENEMY_PROJECTILE_SIZE = { width: 48, height: 32 };
 
 function enemySpriteSize() {
   const height = Math.round(ENEMY_TARGET_VISIBLE_HEIGHT * ENEMY_FRAME_HEIGHT / ENEMY_VISIBLE_FRAME_HEIGHT);
@@ -195,6 +199,7 @@ export class TrialScene extends Phaser.Scene {
   private readonly hazards: DamageHazard[] = [];
   private readonly generatedSegments: GeneratedSegment[] = [];
   private readonly enemies: EnemyUnit[] = [];
+  private readonly enemyProjectiles: EnemyProjectile[] = [];
   private readonly checkpointFlags: Phaser.GameObjects.Triangle[] = [];
   private readonly score: ScoreState = createScoreState();
   private readonly scoreEvents: AttemptEvent[] = [];
@@ -250,6 +255,7 @@ export class TrialScene extends Phaser.Scene {
     this.load.image(ISLAND_SET_PIECES[1], "/space/island-5.webp");
     this.load.image(PICKUP_TEXTURE, "/items/cigarette-pack.webp");
     this.load.image(MOTORCYCLE_TEXTURE, "/vehicles/motorcycle.png");
+    this.load.image(ENEMY_PROJECTILE_TEXTURE, "/monsters/flying-demon/projectile.png");
     this.load.image(MOTORCYCLE_MOUNT_TEXTURE, "/vehicles/motorcycle-mount.png");
     this.load.image(MOTORCYCLE_RIDING_TEXTURE, "/vehicles/motorcycle-riding.png");
     MOTORCYCLE_RIDE_FRAME_TEXTURES.forEach((key, index) => {
@@ -443,7 +449,7 @@ export class TrialScene extends Phaser.Scene {
       baseY: spec.y,
       minX: Math.min(minX, maxX),
       maxX: Math.max(minX, maxX),
-      direction: 1,
+      direction: -1,
       state: "hover",
       stateUntil: 0,
       impactAt: 0,
@@ -947,16 +953,10 @@ export class TrialScene extends Phaser.Scene {
 
       if (enemy.state === "attack") {
         enemy.direction = dx < 0 ? -1 : 1;
-        enemy.sprite.setFlipX(enemy.direction < 0);
+        enemy.sprite.setFlipX(enemy.direction > 0);
         if (!enemy.attackHit && time >= enemy.impactAt) {
           enemy.attackHit = true;
-          const stillInRange = Math.abs(this.player.x - enemy.sprite.x) < attackRange + 24
-            && Math.abs(this.player.y - enemy.hitbox.y) < verticalRange;
-          if (stillInRange && time >= this.invulnerableUntil) {
-            this.playEffect("fx-player-impact", this.player.x, this.player.y, 68);
-            this.die();
-            return;
-          }
+          this.launchEnemyProjectile(enemy, time);
         }
         if (time >= enemy.stateUntil) {
           enemy.state = "approach";
@@ -986,7 +986,7 @@ export class TrialScene extends Phaser.Scene {
       enemy.hitbox.setPosition(enemy.sprite.x, enemy.sprite.y);
       const moving = Math.abs(enemy.sprite.x - previousX) > 0.1 || Math.abs(enemy.sprite.y - previousY) > 0.1;
 
-      enemy.sprite.setFlipX(enemy.direction < 0);
+      enemy.sprite.setFlipX(enemy.direction > 0);
       if (aggro && canReachPlayer && time >= enemy.nextAttackAt) {
         enemy.direction = dx < 0 ? -1 : 1;
         enemy.state = "attack";
@@ -994,11 +994,49 @@ export class TrialScene extends Phaser.Scene {
         enemy.impactAt = time + 500;
         enemy.attackHit = false;
         enemy.nextAttackAt = time + 2_000;
-        enemy.sprite.setFlipX(enemy.direction < 0);
+        enemy.sprite.setFlipX(enemy.direction > 0);
         this.playEnemyAnimation(enemy, "attack");
       } else {
         enemy.state = aggro ? "approach" : "hover";
         this.playEnemyAnimation(enemy, moving ? "move" : "idle");
+      }
+    }
+    this.updateEnemyProjectiles(time, delta);
+  }
+
+  private launchEnemyProjectile(enemy: EnemyUnit, time: number) {
+    const originX = enemy.sprite.x + enemy.direction * 28;
+    const originY = enemy.sprite.y + 2;
+    const deltaX = this.player.x - originX;
+    const deltaY = this.player.y - originY;
+    const distance = Math.max(1, Math.hypot(deltaX, deltaY));
+    const velocityX = deltaX / distance * ENEMY_PROJECTILE_SPEED;
+    const velocityY = deltaY / distance * ENEMY_PROJECTILE_SPEED;
+    const sprite = this.add.image(originX, originY, ENEMY_PROJECTILE_TEXTURE)
+      .setDisplaySize(ENEMY_PROJECTILE_SIZE.width, ENEMY_PROJECTILE_SIZE.height)
+      .setDepth(4)
+      .setRotation(Math.atan2(velocityY, velocityX) - Math.PI);
+    this.enemyProjectiles.push({ sprite, velocityX, velocityY, expiresAt: time + 4_000 });
+  }
+
+  private updateEnemyProjectiles(time: number, delta: number) {
+    const step = Phaser.Math.Clamp(delta, 0, 50) / 1_000;
+    for (let index = this.enemyProjectiles.length - 1; index >= 0; index -= 1) {
+      const projectile = this.enemyProjectiles[index];
+      projectile.sprite.x += projectile.velocityX * step;
+      projectile.sprite.y += projectile.velocityY * step;
+      if (time >= projectile.expiresAt) {
+        projectile.sprite.destroy();
+        this.enemyProjectiles.splice(index, 1);
+        continue;
+      }
+      if (time >= this.invulnerableUntil
+        && Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), projectile.sprite.getBounds())) {
+        projectile.sprite.destroy();
+        this.enemyProjectiles.splice(index, 1);
+        this.playEffect("fx-player-impact", this.player.x, this.player.y, 68);
+        this.die();
+        return;
       }
     }
   }
@@ -1064,6 +1102,8 @@ export class TrialScene extends Phaser.Scene {
 
   private die() {
     if (this.respawning || this.finished || performance.now() < this.invulnerableUntil) return;
+    for (const projectile of this.enemyProjectiles) projectile.sprite.destroy();
+    this.enemyProjectiles.length = 0;
     this.respawning = true;
     this.playEffect("fx-dash-smoke", this.player.x, this.player.y, 66, 58);
     this.endMotorcycleRide();
