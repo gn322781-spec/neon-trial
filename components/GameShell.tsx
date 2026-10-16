@@ -13,6 +13,34 @@ import { getSupabaseConfig } from "@/lib/supabase/config";
 type Screen = "home" | "game" | "ranking" | "settings" | "result";
 const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, lives: 4, distance: 0, dashReady: true, checkpoint: 0 };
 type RankRow = { position: number; nickname: string; best_score: number };
+const RANKING_NAME_LAYERS = ["Layer_43", "Layer_39", "Layer_35", "Layer_32", "Layer_29", "Layer_26", "Layer_23"];
+const RANKING_SCORE_LAYERS = ["Layer_42", "Layer_38", "Layer_34", "Layer_31", "Layer_28", "Layer_25", "Layer_22"];
+
+function updateRankingArtwork(document: Document | null, rows: RankRow[]) {
+  if (!document) return;
+  const writeText = (layerId: string, value: string, maxWidth?: number) => {
+    const text = document.getElementById(layerId)?.querySelector<SVGTextElement>("text");
+    if (!text) return;
+    text.textContent = value;
+    if (maxWidth === undefined || !value) return;
+    let measuredWidth: number;
+    try {
+      measuredWidth = text.getComputedTextLength();
+    } catch {
+      return;
+    }
+    if (measuredWidth > maxWidth) {
+      text.setAttribute("textLength", String(maxWidth));
+      text.setAttribute("lengthAdjust", "spacingAndGlyphs");
+    } else {
+      text.removeAttribute("textLength");
+      text.removeAttribute("lengthAdjust");
+    }
+  };
+
+  RANKING_NAME_LAYERS.forEach((layerId, index) => writeText(layerId, rows[index]?.nickname ?? "", 470));
+  RANKING_SCORE_LAYERS.forEach((layerId, index) => writeText(layerId, rows[index]?.best_score.toLocaleString("pt-BR") ?? ""));
+}
 
 function validNickname(value: string) {
   const nickname = value.normalize("NFC").trim();
@@ -42,8 +70,10 @@ export function GameShell() {
   const [rankStatus, setRankStatus] = useState<"idle" | "loading" | "loading-more" | "loaded" | "empty" | "error">("idle");
   const [rankError, setRankError] = useState("");
   const [rankPage, setRankPage] = useState(0);
+  const [rankDisplayedPage, setRankDisplayedPage] = useState(0);
   const [rankHasMore, setRankHasMore] = useState(false);
   const [rankReload, setRankReload] = useState(0);
+  const rankingSvgRef = useRef<HTMLObjectElement>(null);
   const attemptRef = useRef<Promise<{ id: string; token: string } | null>>(Promise.resolve(null));
 
   useEffect(() => {
@@ -118,7 +148,8 @@ export function GameShell() {
     let active = true;
     void fetchRanking(rankPage).then((data) => {
       if (!active) return;
-      setRankRows((current) => rankPage === 0 ? data.items : [...current, ...data.items]);
+      setRankRows(data.items);
+      setRankDisplayedPage(rankPage);
       setPersonalRank(data.me);
       setRankHasMore(data.hasMore);
       setRankError("");
@@ -133,10 +164,15 @@ export function GameShell() {
     return () => { active = false; };
   }, [screen, rankPage, rankReload]);
 
+  useEffect(() => {
+    if (screen === "ranking") updateRankingArtwork(rankingSvgRef.current?.contentDocument ?? null, rankRows);
+  }, [screen, rankRows]);
+
   const openRanking = () => {
     setRankRows([]);
     setPersonalRank(null);
     setRankPage(0);
+    setRankDisplayedPage(0);
     setRankStatus("loading");
     setRankError("");
     setRankReload((current) => current + 1);
@@ -236,23 +272,32 @@ export function GameShell() {
 
   if (screen === "ranking") {
     return (
-      <main className="shell interior-screen">
+      <main className="shell interior-screen ranking-screen">
         <header className="subpage-head"><button className="text-button" onClick={() => setScreen("home")}>← MENU</button><span className="eyebrow">CLASSIFICAÇÃO GLOBAL</span></header>
         <section className="ranking-card">
-          <div className="ranking-title"><span className="eyebrow">TRIAL / SEASON 01</span><h1>RANKING</h1></div>
-          {personalRank && <div className="personal-rank"><span>SEU MELHOR</span><strong>{personalRank.best_score.toLocaleString("pt-BR")}</strong><b>#{personalRank.position} · {personalRank.nickname}</b></div>}
-          {rankStatus === "loading" && <div className="ranking-empty"><div className="signal-mark">⌁</div><h2>Conectando ao placar…</h2><p>Buscando recordes confirmados pelo servidor.</p></div>}
-          {rankStatus === "error" && <div className="ranking-empty"><div className="signal-mark">⌁</div><h2>Ranking indisponível</h2><p>{rankError}</p><button className="secondary-button retry-rank" onClick={openRanking}>TENTAR NOVAMENTE</button></div>}
-          {rankStatus === "empty" && <div className="ranking-empty"><div className="signal-mark">⌁</div><h2>Ainda não há recordes</h2><p>Conclua a fase para disputar a primeira posição global.</p></div>}
-          {rankRows.length > 0 && <>
-            <div className="podium" aria-label="Pódio dos três primeiros">
-              {rankRows.slice(0, 3).map((row) => <div key={`${row.position}:${row.nickname}`} className={`podium-card podium-${row.position}`}><span>0{row.position}</span><strong>{row.nickname}</strong><b>{row.best_score.toLocaleString("pt-BR")}</b><small>{row.position === 1 ? "TOP TRIAL" : row.position === 2 ? "RUNNER UP" : "THIRD PLACE"}</small></div>)}
-            </div>
-            <div className="leaderboard-list">{rankRows.slice(3).map((row) => <div key={`${row.position}:${row.nickname}`} className={`leader-row ${personalRank?.nickname === row.nickname ? "current-player" : ""}`}><span>{String(row.position).padStart(2, "0")}</span><strong>{row.nickname}</strong><b>{row.best_score.toLocaleString("pt-BR")}</b></div>)}</div>
-            {rankHasMore && <button className="secondary-button load-more" onClick={() => { setRankStatus("loading-more"); setRankPage((page) => page + 1); }}>CARREGAR MAIS</button>}
-            {rankStatus === "loading-more" && <p className="loading-more-note">CARREGANDO MAIS PILOTOS…</p>}
-          </>}
-          <div className="ranking-footer"><span>IDENTIDADE: {nickname || "NÃO DEFINIDA"}</span><span>VERSION {GAME_VERSION.toUpperCase()}</span></div>
+          <div className="ranking-board">
+            <object ref={rankingSvgRef} className="ranking-board-art" data="/ranking-board.svg" type="image/svg+xml" aria-hidden="true" onLoad={() => updateRankingArtwork(rankingSvgRef.current?.contentDocument ?? null, rankRows)} />
+            <ol className="ranking-board-accessible" aria-label="Pontuações do ranking">
+              {rankRows.map((row) => <li key={`${row.position}:${row.nickname}`}>{row.position}. {row.nickname}: {row.best_score.toLocaleString("pt-BR")} pontos</li>)}
+            </ol>
+            {rankRows.length > 0 && <nav className="ranking-pages" aria-label="Páginas do ranking">
+              {[-1, 0, 1].map((offset) => {
+                const page = rankDisplayedPage + offset;
+                const disabled = page < 0 || page > rankDisplayedPage && !rankHasMore || rankStatus === "loading-more" || rankStatus === "loading";
+                return <button key={offset} type="button" aria-label={page < 0 ? "Sem página anterior" : `Página ${page + 1}`} aria-current={page === rankDisplayedPage ? "page" : undefined} disabled={disabled} onClick={() => {
+                  if (disabled || page === rankDisplayedPage) return;
+                  setRankStatus("loading-more");
+                  setRankPage(page);
+                }} />;
+              })}
+            </nav>}
+          </div>
+          {rankStatus === "loading" && <p className="ranking-message" role="status">BUSCANDO RECORDES CONFIRMADOS…</p>}
+          {rankStatus === "loading-more" && <p className="ranking-message" role="status">CARREGANDO PÁGINA {String(rankPage + 1).padStart(2, "0")}…</p>}
+          {rankStatus === "error" && <div className="ranking-message ranking-error" role="alert"><span>{rankError}</span><button type="button" onClick={() => { setRankStatus("loading-more"); setRankReload((current) => current + 1); }}>TENTAR NOVAMENTE</button></div>}
+          {rankStatus === "empty" && <p className="ranking-message">AINDA NÃO HÁ RECORDES. CONCLUA UMA PARTIDA PARA DISPUTAR A PRIMEIRA POSIÇÃO.</p>}
+          {personalRank && <div className="ranking-personal"><span>SEU MELHOR</span><strong>{personalRank.best_score.toLocaleString("pt-BR")}</strong><b>#{personalRank.position} · {personalRank.nickname}</b></div>}
+          <div className="ranking-footer"><span>IDENTIDADE: {nickname || "NÃO DEFINIDA"}</span><span>PÁGINA {String(rankDisplayedPage + 1).padStart(2, "0")} · VERSION {GAME_VERSION.toUpperCase()}</span></div>
         </section>
       </main>
     );
