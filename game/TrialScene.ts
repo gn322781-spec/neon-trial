@@ -19,6 +19,7 @@ type GeneratedSegment = {
   checkpointX: number;
   checkpoint?: Phaser.GameObjects.Triangle;
   platforms: Phaser.GameObjects.Rectangle[];
+  pickups: Phaser.GameObjects.Image[];
   objects: Phaser.GameObjects.GameObject[];
   hazards: DamageHazard[];
 };
@@ -70,6 +71,16 @@ const PLAYER_TEXTURES = {
   dash: "player-dash",
 } as const;
 
+function createSegmentRandom(index: number) {
+  let state = Math.imul(index + 1, 0x9e3779b1) >>> 0;
+  return () => {
+    let value = state += 0x6d2b79f5;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
 export class TrialScene extends Phaser.Scene {
   private readonly controls: Controls;
   private readonly audio: AudioFeedback;
@@ -93,6 +104,7 @@ export class TrialScene extends Phaser.Scene {
   private checkpointX = 75;
   private nextEndlessCheckpointX = WORLD_WIDTH + 80;
   private generatedChunkCount = 0;
+  private lastEndlessIslandVariant = -1;
   private worldEndX = WORLD_WIDTH;
   private deaths = 0;
   private coyoteUntil = 0;
@@ -278,6 +290,7 @@ export class TrialScene extends Phaser.Scene {
       const segment = this.generatedSegments[index];
       if (segment.end >= this.checkpointX - SEGMENT_LENGTH || segment.renderEnd >= cameraLeft - 200) continue;
       for (const platform of segment.platforms) this.platforms.remove(platform, true, true);
+      for (const pickup of segment.pickups) this.crystals.remove(pickup, true, true);
       for (const hazard of segment.hazards) {
         const hazardIndex = this.hazards.indexOf(hazard);
         if (hazardIndex >= 0) this.hazards.splice(hazardIndex, 1);
@@ -296,38 +309,50 @@ export class TrialScene extends Phaser.Scene {
     const start = WORLD_WIDTH + index * SEGMENT_LENGTH;
     const end = start + SEGMENT_LENGTH;
     const difficulty = Math.floor(index / 2);
-    const gap = Math.min(55 + difficulty * 8, 115);
-    const platformWidth = (SEGMENT_LENGTH - 40 - gap * 2) / 3;
+    const random = createSegmentRandom(index);
+    const gap = Math.min(48 + difficulty * 8 + Math.floor(random() * 24), 115);
+    const availableWidth = SEGMENT_LENGTH - 40 - gap * 2;
+    const widthFactors = [0.82 + random() * 0.36, 0.82 + random() * 0.36, 0.82 + random() * 0.36];
+    const widthFactorTotal = widthFactors.reduce((total, factor) => total + factor, 0);
+    const platformWidths = widthFactors.map((factor) => availableWidth * factor / widthFactorTotal);
+    const secondHeight = 420 + Math.floor(random() * 61);
+    const thirdHeight = Phaser.Math.Clamp(secondHeight + Math.floor(random() * 91) - 45, 420, 480);
     const segment: GeneratedSegment = {
       start,
       end,
       renderEnd: end,
       checkpointX: start + 80,
       platforms: [],
+      pickups: [],
       objects: [],
       hazards: [],
     };
 
-    if (index % 2 === 0) {
-      const texture = ISLAND_SET_PIECES[index % ISLAND_SET_PIECES.length];
-      this.addFloatingSetPiece(start + 500, 48 + (index % 3) * 14, 185 + (index % 2) * 20, texture, segment.objects);
+    if (random() < 0.72) {
+      const texture = ISLAND_SET_PIECES[Math.floor(random() * ISLAND_SET_PIECES.length)];
+      this.addFloatingSetPiece(start + 360 + random() * 280, 34 + random() * 64, 155 + random() * 80, texture, segment.objects);
     }
 
-    const platforms: Array<{ center: number; surfaceY: number }> = [];
-    const heights = [
-      [480, 430, 455],
-      [450, 480, 425],
-      [480, 435, 470],
-      [455, 480, 430],
-    ][index % 4];
+    const platforms: Array<{ center: number; surfaceY: number; width: number }> = [];
     let left = start + 20;
     for (let part = 0; part < 3; part += 1) {
-      const center = left + platformWidth / 2;
-      const surfaceY = heights[part];
-      const variant = (index + part * 3) % ISLAND_PLATFORMS.length;
-      this.addIslandPlatform(center, surfaceY, platformWidth, 60, variant, segment);
-      platforms.push({ center, surfaceY });
-      left += platformWidth + gap;
+      const width = platformWidths[part];
+      const center = left + width / 2;
+      const surfaceY = [480, secondHeight, thirdHeight][part];
+      let variant = Math.floor(random() * ISLAND_PLATFORMS.length);
+      if (variant === this.lastEndlessIslandVariant) variant = (variant + 1 + Math.floor(random() * (ISLAND_PLATFORMS.length - 1))) % ISLAND_PLATFORMS.length;
+      this.lastEndlessIslandVariant = variant;
+      this.addIslandPlatform(center, surfaceY, width, 60, variant, segment);
+      platforms.push({ center, surfaceY, width });
+
+      const pickup = this.add.image(center, surfaceY - 24, PICKUP_TEXTURE).setDisplaySize(24, 40).setDepth(1);
+      pickup.setData("crystalId", `endless-${index}-${part}`);
+      this.crystals.add(pickup);
+      (pickup.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      this.tweens.add({ targets: pickup, y: surfaceY - 30, duration: 650, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+      segment.pickups.push(pickup);
+
+      left += width + gap;
     }
 
     const hazardCount = Math.min(3 + Math.floor(index / 2), 6);
@@ -336,9 +361,10 @@ export class TrialScene extends Phaser.Scene {
       const slot = Math.floor(obstacle / platforms.length);
       const firstSlotSide = platformIndex === 0 ? 1 : -1;
       const side = slot % 2 === 0 ? firstSlotSide : -firstSlotSide;
-      const x = platforms[platformIndex].center + side * platformWidth * 0.28;
+      const platform = platforms[platformIndex];
+      const x = platform.center + side * platform.width * 0.28;
       const kind = difficulty >= 5 && obstacle % 3 === 2 ? "laser" : difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
-      const surfaceY = platforms[platformIndex].surfaceY;
+      const surfaceY = platform.surfaceY;
       this.addHazard(x, surfaceY - (kind === "laser" ? 55 : 15), kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
     }
 
@@ -353,7 +379,7 @@ export class TrialScene extends Phaser.Scene {
     const id = crystal.getData("crystalId") as string | undefined;
     if (!id || !this.award("crystal", `crystal:${id}`)) return;
     this.audio.play("crystal");
-    crystal.destroy();
+    this.crystals.remove(crystal, true, true);
     this.emitHud();
   }
 
