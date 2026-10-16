@@ -65,12 +65,12 @@ const PICKUP_TEXTURE = "cigarette-pack";
 const BACKGROUND_LAYERS = [
   { key: "cave-color", path: "/cave/7.png", parallax: 0.005, depth: -32, alpha: 1 },
   { key: "cave-backdrop", path: "/cave/0.png", parallax: 0.012, depth: -30, alpha: 1 },
-  { key: "cave-edges", path: "/cave/1.png", parallax: 0.045, depth: -28, alpha: 0.9 },
-  { key: "cave-columns", path: "/cave/3.png", parallax: 0.09, depth: -26, alpha: 0.72 },
-  { key: "cave-overhangs", path: "/cave/5.png", parallax: 0.15, depth: -24, alpha: 0.74 },
-  { key: "cave-pillars", path: "/cave/4.png", parallax: 0.21, depth: -22, alpha: 0.72 },
+  { key: "cave-foreground", path: "/cave/6.png", parallax: 0.08, depth: -28, alpha: 0.78 },
+  { key: "cave-overhangs", path: "/cave/5.png", parallax: 0.13, depth: -26, alpha: 0.74 },
+  { key: "cave-pillars", path: "/cave/4.png", parallax: 0.18, depth: -24, alpha: 0.72 },
+  { key: "cave-columns", path: "/cave/3.png", parallax: 0.23, depth: -22, alpha: 0.72 },
   { key: "cave-rubble", path: "/cave/2.png", parallax: 0.28, depth: -20, alpha: 0.88 },
-  { key: "cave-foreground", path: "/cave/6.png", parallax: 0.34, depth: -18, alpha: 0.78 },
+  { key: "cave-edges", path: "/cave/1.png", parallax: 0.34, depth: -18, alpha: 0.9 },
 ] as const;
 const ISLAND_PLATFORMS = [
   { key: "space-island-1", surface: 0.46 },
