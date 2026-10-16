@@ -3,7 +3,7 @@ import { AudioFeedback } from "@/game/audio";
 import { Controls } from "@/game/controls";
 import { PHYSICS, jumpVelocityAfterRelease } from "@/game/physics";
 import { awardScore, createScoreState, GAME_VERSION, STARTING_LIVES, SURVIVAL_SCORE_PER_SECOND, type ScoreEvent, type ScoreState } from "@/game/rules";
-import { ZONES } from "@/game/zones";
+import { ZONES, type EnemyKind, type EnemySpec } from "@/game/zones";
 
 export type TrialHud = { score: number; zone: number; deaths: number; lives: number; distance: number; dashReady: boolean; checkpoint: number };
 export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: number };
@@ -11,7 +11,24 @@ export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameV
 
 type MobileSnapshot = ReturnType<Controls["snapshot"]>;
 type DamageHazard = { shape: Phaser.GameObjects.Rectangle; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
-type Target = Phaser.GameObjects.Rectangle & { targetId: string; activeTarget: boolean };
+type EnemyState = "patrol" | "approach" | "attack" | "hit" | "dying";
+type EnemyUnit = {
+  id: string;
+  kind: EnemyKind;
+  sprite: Phaser.GameObjects.Sprite;
+  hitbox: Phaser.GameObjects.Rectangle;
+  homeX: number;
+  baseY: number;
+  minX: number;
+  maxX: number;
+  direction: number;
+  state: EnemyState;
+  stateUntil: number;
+  impactAt: number;
+  attackHit: boolean;
+  nextAttackAt: number;
+  health: number;
+};
 type GeneratedSegment = {
   start: number;
   end: number;
@@ -22,6 +39,7 @@ type GeneratedSegment = {
   pickups: Phaser.GameObjects.Image[];
   objects: Phaser.GameObjects.GameObject[];
   hazards: DamageHazard[];
+  enemies: EnemyUnit[];
 };
 type BackgroundLayer = { sprite: Phaser.GameObjects.TileSprite; parallax: number };
 type Keys = {
@@ -81,6 +99,10 @@ const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.dash]: 33 / 375,
 };
 const PLAYER_ART_GROUNDING_OVERLAP = 2;
+const ENEMY_SPRITE_SIZE = 168;
+const ENEMY_KINDS: readonly EnemyKind[] = ["goblin", "mushroom", "skeleton", "flying-eye"];
+const ENEMY_ATTACK_RANGE: Record<EnemyKind, number> = { goblin: 84, mushroom: 92, skeleton: 80, "flying-eye": 104 };
+const ENEMY_MOVE_SPEED: Record<EnemyKind, number> = { goblin: 104, mushroom: 78, skeleton: 88, "flying-eye": 128 };
 
 function createSegmentRandom(index: number) {
   let state = Math.imul(index + 1, 0x9e3779b1) >>> 0;
@@ -103,7 +125,7 @@ export class TrialScene extends Phaser.Scene {
   private crystals!: Phaser.Physics.Arcade.StaticGroup;
   private readonly hazards: DamageHazard[] = [];
   private readonly generatedSegments: GeneratedSegment[] = [];
-  private readonly targets: Target[] = [];
+  private readonly enemies: EnemyUnit[] = [];
   private readonly checkpointFlags: Phaser.GameObjects.Triangle[] = [];
   private readonly score: ScoreState = createScoreState();
   private readonly scoreEvents: AttemptEvent[] = [];
@@ -157,10 +179,17 @@ export class TrialScene extends Phaser.Scene {
     this.load.image(PLAYER_TEXTURES.jumpAir, "/character/06_pulo_no_ar.png");
     this.load.image(PLAYER_TEXTURES.landing, "/character/07_aterrissagem.png");
     this.load.image(PLAYER_TEXTURES.dash, "/character/08_dash_ataque.png");
+    for (const kind of ENEMY_KINDS) {
+      const root = `/monsters/${kind}`;
+      for (const action of ["idle", "move", "attack", "hit", "death"] as const) {
+        this.load.spritesheet(`monster-${kind}-${action}-sheet`, `${root}/${action}.png`, { frameWidth: 150, frameHeight: 150 });
+      }
+    }
   }
 
   create() {
     this.viewWidth = this.scale.gameSize.width;
+    this.createEnemyAnimations();
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT + 1_200);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     this.cameras.main.setZoom(1);
@@ -186,10 +215,7 @@ export class TrialScene extends Phaser.Scene {
       }
       for (const hazard of zone.hazards) this.addHazard(hazard.x, hazard.y, hazard.width, hazard.height, hazard.kind);
       for (const enemy of zone.enemies) {
-        const target = this.add.rectangle(enemy.x, enemy.y, 30, 38, 0xff477e).setStrokeStyle(2, 0xffb5cb) as Target;
-        target.targetId = enemy.id;
-        target.activeTarget = true;
-        this.targets.push(target);
+        this.addEnemy(enemy);
       }
       this.add.text(zone.start + 34, 92, zone.name, { fontFamily: "monospace", fontSize: "18px", color: "#6ff6ff", letterSpacing: 2 })
         .setScrollFactor(1).setDepth(1);
@@ -219,6 +245,66 @@ export class TrialScene extends Phaser.Scene {
     }) as Keys;
     this.runStartedAt = performance.now();
     this.emitHud();
+  }
+
+  private createEnemyAnimations() {
+    for (const kind of ENEMY_KINDS) {
+      const frameCounts = kind === "skeleton"
+        ? { idle: 4, move: 4, attack: 8, hit: 4, death: 4 }
+        : kind === "flying-eye"
+          ? { idle: 8, move: 8, attack: 8, hit: 4, death: 4 }
+          : { idle: 4, move: 8, attack: 8, hit: 4, death: 4 };
+      for (const action of ["idle", "move", "attack", "hit", "death"] as const) {
+        const key = `monster-${kind}-${action}`;
+        if (this.anims.exists(key)) continue;
+        const sheetKey = `${key}-sheet`;
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(sheetKey, { start: 0, end: frameCounts[action] - 1 }),
+          frameRate: action === "idle" ? 5 : action === "attack" ? 10 : 9,
+          repeat: action === "idle" || action === "move" ? -1 : 0,
+        });
+      }
+    }
+  }
+
+  private addEnemy(spec: EnemySpec, segment?: GeneratedSegment) {
+    const flying = spec.kind === "flying-eye";
+    const minX = spec.minX ?? spec.x - 105;
+    const maxX = spec.maxX ?? spec.x + 105;
+    const sprite = this.add.sprite(spec.x, flying ? spec.y : spec.y - 28, `monster-${spec.kind}-idle-sheet`)
+      .setDisplaySize(ENEMY_SPRITE_SIZE, ENEMY_SPRITE_SIZE)
+      .setDepth(2);
+    const hitbox = this.add.rectangle(spec.x, flying ? spec.y : spec.y - 24, flying ? 48 : 46, flying ? 46 : 52, 0, 0)
+      .setVisible(false)
+      .setDepth(1);
+    const enemy: EnemyUnit = {
+      id: spec.id,
+      kind: spec.kind,
+      sprite,
+      hitbox,
+      homeX: spec.x,
+      baseY: spec.y,
+      minX: Math.min(minX, maxX),
+      maxX: Math.max(minX, maxX),
+      direction: 1,
+      state: "patrol",
+      stateUntil: 0,
+      impactAt: 0,
+      attackHit: false,
+      nextAttackAt: this.time.now + 900 + ENEMY_KINDS.indexOf(spec.kind) * 250,
+      health: spec.kind === "skeleton" ? 3 : spec.kind === "mushroom" ? 1 : 2,
+    };
+    this.enemies.push(enemy);
+    this.playEnemyAnimation(enemy, "idle");
+    segment?.enemies.push(enemy);
+    segment?.objects.push(sprite, hitbox);
+    return enemy;
+  }
+
+  private playEnemyAnimation(enemy: EnemyUnit, action: "idle" | "move" | "attack" | "hit" | "death") {
+    const key = `monster-${enemy.kind}-${action}`;
+    if (enemy.sprite.anims.currentAnim?.key !== key) enemy.sprite.anims.play(key);
   }
 
   private drawBackdrop() {
@@ -309,6 +395,10 @@ export class TrialScene extends Phaser.Scene {
         const hazardIndex = this.hazards.indexOf(hazard);
         if (hazardIndex >= 0) this.hazards.splice(hazardIndex, 1);
       }
+      for (const enemy of segment.enemies) {
+        const enemyIndex = this.enemies.indexOf(enemy);
+        if (enemyIndex >= 0) this.enemies.splice(enemyIndex, 1);
+      }
       for (const object of segment.objects) {
         if (segment.platforms.includes(object as Phaser.GameObjects.Rectangle)) continue;
         if (object.scene) object.destroy();
@@ -340,6 +430,7 @@ export class TrialScene extends Phaser.Scene {
       pickups: [],
       objects: [],
       hazards: [],
+      enemies: [],
     };
 
     if (random() < 0.72) {
@@ -382,6 +473,24 @@ export class TrialScene extends Phaser.Scene {
       this.addHazard(x, surfaceY - (kind === "laser" ? 55 : 15), kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
     }
 
+    const monsterCount = difficulty >= 4 && random() > 0.62 ? 2 : 1;
+    for (let encounter = 0; encounter < monsterCount; encounter += 1) {
+      const platform = platforms[(encounter + Math.floor(random() * platforms.length)) % platforms.length];
+      const kind = ENEMY_KINDS[Math.floor(random() * ENEMY_KINDS.length)];
+      const minX = platform.center - platform.width / 2 + 26;
+      const maxX = platform.center + platform.width / 2 - 26;
+      const spawnX = Phaser.Math.Clamp(platform.center + (random() - 0.5) * Math.max(0, platform.width - 72), minX, maxX);
+      const spawnY = kind === "flying-eye" ? Phaser.Math.Clamp(platform.surfaceY - 135, 120, 360) : platform.surfaceY;
+      this.addEnemy({
+        x: spawnX,
+        y: spawnY,
+        minX,
+        maxX,
+        kind,
+        id: `endless-${index}-monster-${encounter}`,
+      }, segment);
+    }
+
     segment.checkpoint = this.addCheckpoint(segment.checkpointX, segment.objects);
     this.generatedSegments.push(segment);
     this.worldEndX = end + CHUNK_AHEAD * this.viewWidth;
@@ -397,7 +506,7 @@ export class TrialScene extends Phaser.Scene {
     this.emitHud();
   }
 
-  update(time: number) {
+  update(time: number, delta: number) {
     if (this.finished || this.respawning) return;
     this.updateBackdrop();
     this.ensureWorldAhead();
@@ -462,7 +571,7 @@ export class TrialScene extends Phaser.Scene {
       this.previous = input;
       return;
     }
-    this.updateTargets();
+    this.updateEnemies(time, delta);
     if (this.respawning || this.finished) {
       this.previous = input;
       return;
@@ -519,9 +628,101 @@ export class TrialScene extends Phaser.Scene {
     }
   }
 
-  private updateTargets() {
-    for (const target of this.targets) {
-      if (target.activeTarget && this.rectanglesOverlap(this.player, target)) this.die();
+  private updateEnemies(time: number, delta: number) {
+    const step = Phaser.Math.Clamp(delta, 0, 50) / 1_000;
+    for (const enemy of this.enemies) {
+      if (!enemy.sprite.active) continue;
+      if (enemy.state === "dying") {
+        if (time >= enemy.stateUntil) {
+          enemy.sprite.destroy();
+          enemy.hitbox.destroy();
+        }
+        continue;
+      }
+      if (enemy.state === "hit") {
+        if (time < enemy.stateUntil) continue;
+        enemy.state = "approach";
+      }
+
+      const flying = enemy.kind === "flying-eye";
+      const dx = this.player.x - enemy.sprite.x;
+      const dy = this.player.y - enemy.hitbox.y;
+      const distance = Math.abs(dx);
+      const attackRange = ENEMY_ATTACK_RANGE[enemy.kind];
+      const verticalRange = flying ? 120 : 88;
+      const canReachPlayer = distance < attackRange + 22 && Math.abs(dy) < verticalRange;
+
+      if (enemy.state === "attack") {
+        enemy.direction = dx < 0 ? -1 : 1;
+        enemy.sprite.setFlipX(enemy.direction < 0);
+        if (!enemy.attackHit && time >= enemy.impactAt) {
+          enemy.attackHit = true;
+          const stillInRange = Math.abs(this.player.x - enemy.sprite.x) < attackRange + 24
+            && Math.abs(this.player.y - enemy.hitbox.y) < verticalRange;
+          if (stillInRange && time >= this.invulnerableUntil) {
+            this.die();
+            return;
+          }
+        }
+        if (time >= enemy.stateUntil) {
+          enemy.state = "approach";
+          this.playEnemyAnimation(enemy, "move");
+        }
+        continue;
+      }
+
+      const aggro = distance < (flying ? 560 : 390) && Math.abs(dy) < (flying ? 240 : 150);
+      let moving = false;
+      if (flying) {
+        const patrolSpan = Math.max(0, Math.min(72, (enemy.maxX - enemy.minX) / 2 - 20));
+        const targetX = aggro
+          ? Phaser.Math.Clamp(this.player.x - Math.sign(dx || enemy.direction) * 76, enemy.minX, enemy.maxX)
+          : Phaser.Math.Clamp(enemy.homeX + Math.sin(time / 1_100 + enemy.homeX) * patrolSpan, enemy.minX, enemy.maxX);
+        const horizontalStep = targetX - enemy.sprite.x;
+        if (Math.abs(horizontalStep) > 5) {
+          enemy.direction = Math.sign(horizontalStep);
+          enemy.sprite.x += enemy.direction * Math.min(Math.abs(horizontalStep), ENEMY_MOVE_SPEED[enemy.kind] * step);
+          moving = true;
+        } else if (aggro && distance > attackRange - 12) {
+          enemy.direction = dx < 0 ? -1 : 1;
+        }
+        const targetY = aggro
+          ? Phaser.Math.Clamp(this.player.y - 68, 100, VIEW_HEIGHT - 105)
+          : enemy.baseY + Math.sin(time / 720 + enemy.homeX) * 20;
+        enemy.sprite.y = Phaser.Math.Linear(enemy.sprite.y, targetY, Math.min(1, step * 2.8));
+        enemy.hitbox.setPosition(enemy.sprite.x, enemy.sprite.y);
+      } else {
+        if (aggro && distance > attackRange - 10) {
+          enemy.direction = dx < 0 ? -1 : 1;
+          const previousX = enemy.sprite.x;
+          const nextX = previousX + enemy.direction * Math.min(distance - attackRange + 10, ENEMY_MOVE_SPEED[enemy.kind] * step);
+          enemy.sprite.x = Phaser.Math.Clamp(nextX, enemy.minX, enemy.maxX);
+          moving = Math.abs(enemy.sprite.x - previousX) > 0.1;
+        } else if (!aggro) {
+          if (enemy.sprite.x <= enemy.minX + 2) enemy.direction = 1;
+          if (enemy.sprite.x >= enemy.maxX - 2) enemy.direction = -1;
+          const previousX = enemy.sprite.x;
+          const nextX = previousX + enemy.direction * ENEMY_MOVE_SPEED[enemy.kind] * 0.32 * step;
+          enemy.sprite.x = Phaser.Math.Clamp(nextX, enemy.minX, enemy.maxX);
+          moving = Math.abs(enemy.sprite.x - previousX) > 0.1;
+        }
+        enemy.hitbox.setPosition(enemy.sprite.x, enemy.baseY - 24);
+      }
+
+      enemy.sprite.setFlipX(enemy.direction < 0);
+      if (aggro && canReachPlayer && time >= enemy.nextAttackAt) {
+        enemy.direction = dx < 0 ? -1 : 1;
+        enemy.state = "attack";
+        enemy.stateUntil = time + 920;
+        enemy.impactAt = time + 500;
+        enemy.attackHit = false;
+        enemy.nextAttackAt = time + 2_000;
+        enemy.sprite.setFlipX(enemy.direction < 0);
+        this.playEnemyAnimation(enemy, "attack");
+      } else {
+        enemy.state = aggro ? "approach" : "patrol";
+        this.playEnemyAnimation(enemy, moving ? "move" : "idle");
+      }
     }
   }
 
@@ -531,16 +732,30 @@ export class TrialScene extends Phaser.Scene {
     this.attackVisual?.destroy();
     this.attackVisual = this.add.rectangle(this.player.x + this.facing * 28, this.player.y, 48, 34, 0x88f7ff, 0.3)
       .setStrokeStyle(2, 0x9fffff).setDepth(2);
-    for (const target of this.targets) {
-      if (!target.activeTarget) continue;
-      const inFront = (target.x - this.player.x) * this.facing >= -4 && Math.abs(target.y - this.player.y) < 58 && Math.abs(target.x - this.player.x) < 72;
-      if (inFront) {
-        target.activeTarget = false;
-        target.destroy();
-        this.award("target", `target:${target.targetId}`);
-        this.audio.play("hit");
-      }
+    for (const enemy of this.enemies) {
+      if (!enemy.sprite.active || enemy.state === "dying") continue;
+      const dx = enemy.sprite.x - this.player.x;
+      const inFront = dx * this.facing >= -8 && Math.abs(dx) < 108;
+      const verticalRange = enemy.kind === "flying-eye" ? 132 : 106;
+      if (inFront && Math.abs(enemy.hitbox.y - this.player.y) < verticalRange) this.hitEnemy(enemy, time);
     }
+  }
+
+  private hitEnemy(enemy: EnemyUnit, time: number) {
+    enemy.health -= 1;
+    this.audio.play("hit");
+    if (enemy.health > 0) {
+      enemy.state = "hit";
+      enemy.stateUntil = time + 380;
+      enemy.nextAttackAt = Math.max(enemy.nextAttackAt, time + 550);
+      this.playEnemyAnimation(enemy, "hit");
+      return;
+    }
+    enemy.state = "dying";
+    enemy.stateUntil = time + 560;
+    enemy.hitbox.setActive(false);
+    this.playEnemyAnimation(enemy, "death");
+    this.award("target", `target:${enemy.id}`);
   }
 
   private updateAttack(time: number) {
