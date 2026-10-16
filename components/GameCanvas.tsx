@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { AudioFeedback } from "@/game/audio";
 import { Controls, type Action } from "@/game/controls";
 import type { TrialHud, TrialResult } from "@/game/TrialScene";
 
 const BUTTONS: { action: Action; label: string; className: string; icon?: string }[] = [
-  { action: "left", label: "◀", className: "move", icon: "direction-left" },
-  { action: "right", label: "▶", className: "move", icon: "direction-right" },
   { action: "jump", label: "PULAR", className: "jump", icon: "cross" },
   { action: "dash", label: "DASH", className: "dash", icon: "triangle" },
   { action: "attack", label: "ATQ", className: "attack", icon: "square" },
@@ -22,6 +20,14 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const activePointers = useRef(new Map<number, Action>());
+  const joystickRef = useRef<HTMLButtonElement>(null);
+  const joystickPointerId = useRef<number | null>(null);
+  const resetJoystick = useCallback(() => {
+    joystickPointerId.current = null;
+    controls.release("touch:joystick");
+    joystickRef.current?.style.setProperty("--stick-x", "0px");
+    joystickRef.current?.style.setProperty("--stick-y", "0px");
+  }, [controls]);
 
   useEffect(() => {
     let game: {
@@ -88,6 +94,7 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
     return () => {
       cancelled = true;
       pointers.clear();
+      resetJoystick();
       controls.releaseAll();
       resizeObserver?.disconnect();
       if (scheduleResize) {
@@ -97,12 +104,13 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
       if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
       game?.destroy(true);
     };
-  }, [runId, controls, audio, onHud, onResult]);
+  }, [runId, controls, audio, onHud, onResult, resetJoystick]);
 
   useEffect(() => {
     const clearInputs = () => {
       controls.releaseAll();
       activePointers.current.clear();
+      resetJoystick();
     };
     const onVisibility = () => { if (document.hidden) clearInputs(); };
     window.addEventListener("blur", clearInputs);
@@ -113,7 +121,7 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("orientationchange", clearInputs);
     };
-  }, [controls]);
+  }, [controls, resetJoystick]);
 
   const press = (event: React.PointerEvent<HTMLButtonElement>, action: Action) => {
     event.preventDefault();
@@ -127,24 +135,51 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
     activePointers.current.delete(event.pointerId);
     controls.release(`touch:${event.pointerId}`);
   };
+  const updateJoystick = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (joystickPointerId.current !== event.pointerId) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const travel = bounds.width * 0.16;
+    const rawX = event.clientX - (bounds.left + bounds.width / 2);
+    const rawY = event.clientY - (bounds.top + bounds.height / 2);
+    const distance = Math.hypot(rawX, rawY);
+    const scale = distance > travel ? travel / distance : 1;
+    const x = rawX * scale;
+    const y = rawY * scale;
+    event.currentTarget.style.setProperty("--stick-x", `${x}px`);
+    event.currentTarget.style.setProperty("--stick-y", `${y}px`);
+
+    controls.release("touch:joystick");
+    const horizontal = x / travel;
+    if (horizontal <= -0.28) controls.press("touch:joystick", "left");
+    else if (horizontal >= 0.28) controls.press("touch:joystick", "right");
+  };
+  const pressJoystick = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (joystickPointerId.current !== null) return;
+    event.preventDefault();
+    joystickPointerId.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateJoystick(event);
+  };
+  const releaseJoystick = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (joystickPointerId.current !== event.pointerId) return;
+    resetJoystick();
+  };
 
   return (
-    <div className="game-stage" aria-label="Área do jogo. Use as setas ou A e D para mover, espaço para pular, Shift para dash e X para atacar.">
+    <div className="game-stage" aria-label="Área do jogo. Use o analógico ou A e D para mover, espaço para pular, Shift para dash e X para atacar.">
       <div ref={hostRef} className="phaser-host" />
       <div className="touch-controls" aria-label="Controles de toque">
         <div className="touch-group touch-movement">
-          {BUTTONS.filter((item) => item.className === "move").map((item) => (
-            <button key={item.action} className={`touch-button ${item.className} icon-control`} aria-label={item.action === "left" ? "Mover para esquerda" : "Mover para direita"}
-              onPointerDown={(event) => press(event, item.action)} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>
-              {item.icon && <span className="touch-icon" aria-hidden="true">
-                <img src={`/ui/buttons/${item.icon}-1.png`} alt="" draggable={false} />
-                <img src={`/ui/buttons/${item.icon}-2.png`} alt="" draggable={false} />
-              </span>}
-            </button>
-          ))}
+          <button ref={joystickRef} className="touch-stick" type="button" aria-label="Analógico para andar"
+            onPointerDown={pressJoystick} onPointerMove={updateJoystick} onPointerUp={releaseJoystick}
+            onPointerCancel={releaseJoystick} onLostPointerCapture={releaseJoystick}>
+            <img src="/ui/buttons/analogue-blank.svg" alt="" draggable={false} />
+            <span className="touch-stick-knob" aria-hidden="true" />
+          </button>
         </div>
         <div className="touch-group touch-actions">
-          {BUTTONS.filter((item) => item.className !== "move").map((item) => (
+          {BUTTONS.map((item) => (
             <button key={item.action} className={`touch-button ${item.className} icon-control`} aria-label={item.action === "jump" ? "Pular" : item.action === "dash" ? "Dash" : "Atacar"}
               onPointerDown={(event) => press(event, item.action)} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>
               {item.icon && <span className="touch-icon" aria-hidden="true">
@@ -158,3 +193,4 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
     </div>
   );
 }
+
