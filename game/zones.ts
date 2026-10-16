@@ -1,6 +1,6 @@
 export type PlatformSpec = { x: number; y: number; width: number; height?: number };
 export type PickupSpec = { x: number; y: number; id: string };
-export type HazardSpec = { x: number; y: number; width: number; height: number; kind: "spike" | "laser" | "saw" };
+export type HazardSpec = { x: number; y: number; width: number; height: number; kind: "spike" | "saw" };
 export type EnemyKind = "goblin" | "mushroom" | "skeleton" | "flying-eye";
 export type EnemySpec = { x: number; y: number; id: string; kind: EnemyKind; minX?: number; maxX?: number };
 export type ZoneSpec = {
@@ -48,7 +48,6 @@ export const ZONES: ZoneSpec[] = [
     crystals: [{ x: 2_110, y: 450, id: "c9" }, { x: 2_490, y: 360, id: "c10" }, { x: 2_740, y: 270, id: "c11" }, { x: 2_990, y: 365, id: "c12" }],
     hazards: [
       { x: 2_380, y: 490, width: 54, height: 36, kind: "saw" },
-      { x: 2_620, y: 450, width: 14, height: 110, kind: "laser" },
       { x: 2_840, y: 490, width: 54, height: 36, kind: "saw" },
     ], enemies: [
       { x: 2_220, y: 480, minX: 2_035, maxX: 2_350, kind: "skeleton", id: "skeleton-phase" },
@@ -70,3 +69,4 @@ export const ZONES: ZoneSpec[] = [
     ],
   },
 ];
+
