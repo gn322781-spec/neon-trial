@@ -256,20 +256,22 @@ export function GameShell() {
   if (screen === "game") {
     return (
       <main className="play-screen">
-        <div className="game-topbar">
-          <button className="icon-button" onClick={() => { controls.releaseAll(); setScreen("home"); }} aria-label="Voltar ao menu">←</button>
-          <div className="hud-stat"><span>PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
-          <div className="hud-stat"><span>SETOR</span><strong>{String(hud.zone).padStart(2, "0")}</strong></div>
-          <div className="hud-stat checkpoint-hud"><span>CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}</strong></div>
-          <div className="hud-stat"><span>QUEDAS</span><strong>{hud.deaths}</strong></div>
-          <div className="lives-hud" role="img" aria-label={`Vidas restantes: ${hud.lives} de 4`} title={`Vidas: ${hud.lives} de 4`}>
-            {Array.from({ length: 4 }, (_, index) => <span key={index} className={`life-heart ${index < hud.lives ? "active" : "lost"}`} aria-hidden="true">{index < hud.lives ? "♥" : "♡"}</span>)}
+        <section className="game-frame" aria-label="Partida em andamento">
+          <div className="game-topbar">
+            <button className="icon-button" onClick={() => { controls.releaseAll(); setScreen("home"); }} aria-label="Voltar ao menu">←</button>
+            <div className="hud-stat"><span>PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
+            <div className="hud-stat"><span>SETOR</span><strong>{String(hud.zone).padStart(2, "0")}</strong></div>
+            <div className="hud-stat checkpoint-hud"><span>CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}</strong></div>
+            <div className="hud-stat"><span>QUEDAS</span><strong>{hud.deaths}</strong></div>
+            <div className="lives-hud" role="img" aria-label={`Vidas restantes: ${hud.lives} de 4`} title={`Vidas: ${hud.lives} de 4`}>
+              {Array.from({ length: 4 }, (_, index) => <span key={index} className={`life-heart ${index < hud.lives ? "active" : "lost"}`} aria-hidden="true">{index < hud.lives ? "♥" : "♡"}</span>)}
+            </div>
+            <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
+            <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
           </div>
-          <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
-          <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
-        </div>
-        <GameCanvas runId={runId} controls={controls} audio={audio} onHud={onHud} onResult={onResult} />
-        <div className="game-hint"><span>← → MOVER</span><span>↓ AGACHAR</span><span>ESPAÇO PULAR</span><span>SHIFT DASH</span><span>X ATACAR</span></div>
+          <GameCanvas runId={runId} controls={controls} audio={audio} onHud={onHud} onResult={onResult} />
+          <div className="game-hint"><span>← → MOVER</span><span>↓ AGACHAR</span><span>ESPAÇO PULAR</span><span>SHIFT DASH</span><span>X ATACAR</span></div>
+        </section>
         <div className="portrait-message"><span>↻</span><strong>Gire o aparelho</strong><small>NEON TRIAL foi projetado para jogar na horizontal.</small></div>
       </main>
     );

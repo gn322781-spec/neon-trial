@@ -131,6 +131,7 @@ export class TrialScene extends Phaser.Scene {
   private attackVisual?: Phaser.GameObjects.Rectangle;
   private wasAirborne = false;
   private landingUntil = 0;
+  private viewWidth = VIEW_WIDTH;
 
   constructor(controls: Controls, audio: AudioFeedback, onHud: (hud: TrialHud) => void, onResult: (result: TrialResult) => void) {
     super({ key: "TrialScene" });
@@ -159,6 +160,7 @@ export class TrialScene extends Phaser.Scene {
   }
 
   create() {
+    this.viewWidth = this.scale.gameSize.width;
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT + 1_200);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     this.cameras.main.setZoom(1);
@@ -189,7 +191,7 @@ export class TrialScene extends Phaser.Scene {
         target.activeTarget = true;
         this.targets.push(target);
       }
-      this.add.text(zone.start + 34, 50, zone.name, { fontFamily: "monospace", fontSize: "18px", color: "#6ff6ff", letterSpacing: 2 })
+      this.add.text(zone.start + 34, 92, zone.name, { fontFamily: "monospace", fontSize: "18px", color: "#6ff6ff", letterSpacing: 2 })
         .setScrollFactor(1).setDepth(1);
       this.add.rectangle(zone.start, 270, 2, 390, 0x37657c, 0.5);
       this.add.rectangle(zone.end, 270, 2, 390, 0x37657c, 0.5);
@@ -221,7 +223,7 @@ export class TrialScene extends Phaser.Scene {
 
   private drawBackdrop() {
     for (const layer of BACKGROUND_LAYERS) {
-      const sprite = this.add.tileSprite(VIEW_WIDTH / 2, VIEW_HEIGHT / 2, VIEW_WIDTH, VIEW_HEIGHT, layer.key)
+      const sprite = this.add.tileSprite(this.viewWidth / 2, VIEW_HEIGHT / 2, this.viewWidth, VIEW_HEIGHT, layer.key)
         .setOrigin(0.5)
         .setTileScale(1.35)
         .setScrollFactor(0)
@@ -292,7 +294,7 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private ensureWorldAhead() {
-    while (this.player.x + CHUNK_AHEAD * VIEW_WIDTH >= WORLD_WIDTH + this.generatedChunkCount * SEGMENT_LENGTH) {
+    while (this.player.x + CHUNK_AHEAD * this.viewWidth >= WORLD_WIDTH + this.generatedChunkCount * SEGMENT_LENGTH) {
       this.addEndlessSegment(this.generatedChunkCount);
       this.generatedChunkCount += 1;
     }
@@ -382,7 +384,7 @@ export class TrialScene extends Phaser.Scene {
 
     segment.checkpoint = this.addCheckpoint(segment.checkpointX, segment.objects);
     this.generatedSegments.push(segment);
-    this.worldEndX = end + CHUNK_AHEAD * VIEW_WIDTH;
+    this.worldEndX = end + CHUNK_AHEAD * this.viewWidth;
     this.physics.world.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT + 1_200);
     this.cameras.main.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT);
   }
