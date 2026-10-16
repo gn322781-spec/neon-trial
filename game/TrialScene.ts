@@ -111,6 +111,13 @@ const PLAYER_ART_GROUNDING_OVERLAP = 2;
 const MOTORCYCLE_TEXTURE = "green-motorcycle";
 const MOTORCYCLE_MOUNT_TEXTURE = "motorcycle-mount";
 const MOTORCYCLE_RIDING_TEXTURE = "motorcycle-riding";
+const GAME_EFFECTS = [
+  { key: "fx-attack-impact", path: "/effects/gigapack/directional_impact_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 7 },
+  { key: "fx-player-impact", path: "/effects/gigapack/symmetrical_impact_001_small_yellow.png", frameWidth: 48, frameHeight: 48, frameCount: 7 },
+  { key: "fx-dash-smoke", path: "/effects/gigapack/directional_smoke_burst_001_small_white.png", frameWidth: 32, frameHeight: 32, frameCount: 21 },
+  { key: "fx-collect-sparkle", path: "/effects/gigapack/round_sparkle_burst_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 14 },
+  { key: "fx-enemy-explosion", path: "/effects/gigapack/symmetrical_explosion_001_small_orange.png", frameWidth: 32, frameHeight: 32, frameCount: 8 },
+] as const;
 const MOTORCYCLE_RIDE_FRAME_TEXTURES = [
   "motorcycle-ride-frame-01",
   "motorcycle-ride-frame-02",
@@ -215,6 +222,9 @@ export class TrialScene extends Phaser.Scene {
 
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
+    for (const effect of GAME_EFFECTS) {
+      this.load.spritesheet(effect.key, effect.path, { frameWidth: effect.frameWidth, frameHeight: effect.frameHeight });
+    }
     for (let index = 0; index < ISLAND_PLATFORMS.length; index += 1) {
       const islandNumber = index === 3 ? 6 : index + 1;
       this.load.image(ISLAND_PLATFORMS[index].key, `/space/island-${islandNumber}.webp`);
@@ -247,6 +257,7 @@ export class TrialScene extends Phaser.Scene {
   create() {
     this.viewWidth = this.scale.gameSize.width;
     this.createEnemyAnimations();
+    this.createEffectAnimations();
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT + 1_200);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     this.cameras.main.setZoom(1);
@@ -336,6 +347,29 @@ export class TrialScene extends Phaser.Scene {
         });
       }
     }
+  }
+
+  private createEffectAnimations() {
+    for (const effect of GAME_EFFECTS) {
+      if (this.anims.exists(effect.key)) continue;
+      this.anims.create({
+        key: effect.key,
+        frames: this.anims.generateFrameNumbers(effect.key, { start: 0, end: effect.frameCount - 1 }),
+        frameRate: 15,
+        repeat: 0,
+      });
+    }
+  }
+
+  private playEffect(key: string, x: number, y: number, width: number, height = width, flipX = false) {
+    const effect = this.add.sprite(x, y, key)
+      .setOrigin(0.5)
+      .setDisplaySize(width, height)
+      .setDepth(5)
+      .setFlipX(flipX);
+    effect.play(key);
+    effect.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => effect.destroy());
+    return effect;
   }
 
   private addEnemy(spec: EnemySpec, segment?: GeneratedSegment) {
@@ -614,6 +648,7 @@ export class TrialScene extends Phaser.Scene {
 
   private collectMotorcycle(pickup: Phaser.GameObjects.Image) {
     if (this.motorcycleRideUntil > this.time.now || !pickup.active) return;
+    this.playEffect("fx-collect-sparkle", pickup.x, pickup.y - 35, 76);
     this.motorcycles.remove(pickup, true, true);
     this.motorcycleRideUntil = this.time.now + MOTORCYCLE_RIDE_DURATION;
     this.motorcycleMountUntil = this.time.now + MOTORCYCLE_MOUNT_DURATION;
@@ -640,6 +675,7 @@ export class TrialScene extends Phaser.Scene {
   private collect(crystal: Phaser.GameObjects.Image) {
     const id = crystal.getData("crystalId") as string | undefined;
     if (!id || !this.award("crystal", `crystal:${id}`)) return;
+    this.playEffect("fx-collect-sparkle", crystal.x, crystal.y, 64);
     this.audio.play("crystal");
     this.crystals.remove(crystal, true, true);
     this.emitHud();
@@ -701,6 +737,7 @@ export class TrialScene extends Phaser.Scene {
         if (direction) this.facing = direction;
         this.dashUntil = time + PHYSICS.dashDurationMs;
         this.nextDashAt = time + PHYSICS.dashCooldownMs;
+        this.playEffect("fx-dash-smoke", this.player.x - this.facing * 25, this.player.y + 20, 64, 54, this.facing < 0);
         this.audio.play("dash");
       }
     }
@@ -842,6 +879,7 @@ export class TrialScene extends Phaser.Scene {
           const stillInRange = Math.abs(this.player.x - enemy.sprite.x) < attackRange + 24
             && Math.abs(this.player.y - enemy.hitbox.y) < verticalRange;
           if (stillInRange && time >= this.invulnerableUntil) {
+            this.playEffect("fx-player-impact", this.player.x, this.player.y, 68);
             this.die();
             return;
           }
@@ -925,6 +963,7 @@ export class TrialScene extends Phaser.Scene {
 
   private hitEnemy(enemy: EnemyUnit, time: number) {
     enemy.health -= 1;
+    this.playEffect("fx-attack-impact", enemy.sprite.x - this.facing * 14, enemy.sprite.y, 62, 62, this.facing < 0);
     this.audio.play("hit");
     if (enemy.health > 0) {
       enemy.state = "hit";
@@ -936,6 +975,7 @@ export class TrialScene extends Phaser.Scene {
     enemy.state = "dying";
     enemy.stateUntil = time + 560;
     enemy.hitbox.setActive(false);
+    this.playEffect("fx-enemy-explosion", enemy.sprite.x, enemy.sprite.y, 80);
     this.playEnemyAnimation(enemy, "death");
     this.award("target", `target:${enemy.id}`);
   }
@@ -980,6 +1020,7 @@ export class TrialScene extends Phaser.Scene {
   private die() {
     if (this.respawning || this.finished || performance.now() < this.invulnerableUntil) return;
     this.respawning = true;
+    this.playEffect("fx-dash-smoke", this.player.x, this.player.y, 66, 58);
     this.endMotorcycleRide();
     this.deaths += 1;
     this.audio.play("death");
