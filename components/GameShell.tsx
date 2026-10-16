@@ -354,7 +354,7 @@ export function GameShell() {
         <div className="hero-art" aria-hidden="true"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="art-platform platform-a"/><div className="art-platform platform-b"/><div className="art-platform platform-c"/><div className="art-player"/><div className="art-crystal crystal-a"/><div className="art-crystal crystal-b"/><div className="art-scanline"/><span className="art-coordinate">NEON CITY / ∞</span><span className="art-axis">RUN — JUMP — REPEAT</span></div>
       </section>
       <section className="feature-strip"><div><span>01</span><strong>PRECISÃO</strong><small>Coyote time + jump buffer</small></div><div><span>02</span><strong>PROGRESSÃO INFINITA</strong><small>Desafios mais difíceis a cada setor</small></div><div><span>03</span><strong>SEU MELHOR</strong><small>Ranking online com sua melhor pontuação</small></div></section>
-      <footer className="home-footer"><span>© NEON TRIAL / {GAME_VERSION.toUpperCase()}</span><span>UMA TENTATIVA DE CADA VEZ</span><span className="connection-state"><i /> LOCAL / SERVIDOR OFFLINE</span></footer>
+      <footer className="home-footer"><span>© NEON TRIAL / {GAME_VERSION.toUpperCase()}</span><span>UMA TENTATIVA DE CADA VEZ</span><span className="connection-state"><i /> LOCAL / SERVIDOR OFFLINE</span><span className="effects-credit">EFEITOS: SUPER PIXEL EFFECTS GIGAPACK · WILL TICE / UNTIED GAMES</span></footer>
     </main>
   );
 }
