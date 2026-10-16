@@ -10,7 +10,7 @@ export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: n
 export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameVersion: string; events: AttemptEvent[]; zonesCompleted: number };
 
 type MobileSnapshot = ReturnType<Controls["snapshot"]>;
-type DamageHazard = { shape: Phaser.GameObjects.Rectangle; visual?: Phaser.GameObjects.Sprite; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
+type DamageHazard = { shape: Phaser.GameObjects.Rectangle; visual?: Phaser.GameObjects.Sprite; smokeCircles?: Phaser.GameObjects.Arc[]; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
 type EnemyState = "patrol" | "approach" | "attack" | "hit" | "dying";
 type EnemyUnit = {
   id: string;
@@ -122,21 +122,8 @@ const PLAYER_ART_GROUNDING_OVERLAP = 2;
 const MOTORCYCLE_TEXTURE = "green-motorcycle";
 const MOTORCYCLE_MOUNT_TEXTURE = "motorcycle-mount";
 const MOTORCYCLE_RIDING_TEXTURE = "motorcycle-riding";
-const HAZARD_SMOKE_ORB_SHEET = "hazard-smoke-orb-sheet";
 const HAZARD_SMOKE_WALL_SHEET = "hazard-smoke-wall-sheet";
-const HAZARD_SMOKE_ORB_ANIMATION = "hazard-smoke-orb";
 const HAZARD_SMOKE_WALL_ANIMATION = "hazard-smoke-wall";
-// Visible-pixel bounds in each 512x512 orb frame. Anchor every animation frame
-// at its visible center and bottom so transparent sheet padding cannot make it
-// appear to float above or sink into an island.
-const HAZARD_SMOKE_ORB_FRAME_ANCHORS = [
-  { x: 271.5 / 512, y: 458 / 512 },
-  { x: 259 / 512, y: 457 / 512 },
-  { x: 247.5 / 512, y: 457 / 512 },
-  { x: 270.5 / 512, y: 435 / 512 },
-  { x: 261.5 / 512, y: 435 / 512 },
-  { x: 251.5 / 512, y: 439 / 512 },
-] as const;
 const GAME_EFFECTS = [
   { key: "fx-attack-impact", path: "/effects/gigapack/directional_impact_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 7 },
   { key: "fx-player-impact", path: "/effects/gigapack/symmetrical_impact_001_small_yellow.png", frameWidth: 48, frameHeight: 48, frameCount: 7 },
@@ -248,7 +235,6 @@ export class TrialScene extends Phaser.Scene {
 
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
-    this.load.spritesheet(HAZARD_SMOKE_ORB_SHEET, "/obstacles/smoke-orb-sheet.png", { frameWidth: 512, frameHeight: 512 });
     this.load.spritesheet(HAZARD_SMOKE_WALL_SHEET, "/obstacles/purple-smoke-wall-sheet.png", { frameWidth: 384, frameHeight: 1024 });
     for (const effect of GAME_EFFECTS) {
       this.load.spritesheet(effect.key, effect.path, { frameWidth: effect.frameWidth, frameHeight: effect.frameHeight });
@@ -338,9 +324,10 @@ export class TrialScene extends Phaser.Scene {
             })
             .sort((left, right) => left.gap - right.gap || left.distanceFromHazard - right.distanceFromHazard)[0];
           if (platform?.gap === 0) {
-            const orbRadius = (Math.max(hazard.width, hazard.height) + 14) / 2;
-            const minX = platform.left + orbRadius;
-            const maxX = platform.right - orbRadius;
+            const smokeRadius = Math.min(hazard.height * 0.42, hazard.width * 0.26);
+            const smokeHalfWidth = smokeRadius * 1.8;
+            const minX = platform.left + smokeHalfWidth;
+            const maxX = platform.right - smokeHalfWidth;
             x = minX <= maxX ? Phaser.Math.Clamp(hazard.x, minX, maxX) : (platform.left + platform.right) / 2;
             y = platform.surfaceY - hazard.height / 2;
           }
@@ -420,7 +407,6 @@ export class TrialScene extends Phaser.Scene {
       });
     }
     const loopingHazards = [
-      { key: HAZARD_SMOKE_ORB_ANIMATION, sheet: HAZARD_SMOKE_ORB_SHEET, frameCount: 6 },
       { key: HAZARD_SMOKE_WALL_ANIMATION, sheet: HAZARD_SMOKE_WALL_SHEET, frameCount: 4 },
     ] as const;
     for (const effect of loopingHazards) {
@@ -555,14 +541,31 @@ export class TrialScene extends Phaser.Scene {
     const shape = this.add.rectangle(x, y, width, height, color, kind === "laser" ? 0.72 : 0.95)
       .setStrokeStyle(2, kind === "laser" ? 0xffa2c0 : 0xffd0db);
     let visual: Phaser.GameObjects.Sprite | undefined;
+    let smokeCircles: Phaser.GameObjects.Arc[] | undefined;
     if (kind === "spike") {
-      const orbSize = Math.max(width, height) + 14;
-      const anchor = HAZARD_SMOKE_ORB_FRAME_ANCHORS[0];
-      visual = this.add.sprite(x, y + height / 2, HAZARD_SMOKE_ORB_SHEET)
-        .setDisplaySize(orbSize, orbSize)
+      const surfaceY = y + height / 2;
+      const radius = Math.min(height * 0.42, width * 0.26);
+      const puffs = [
+        { offsetX: -radius * 0.8, radius: radius * 0.88, fill: 0x713dbb, edge: 0xb577ff },
+        { offsetX: 0, radius, fill: 0x8b48d4, edge: 0xd2a1ff },
+        { offsetX: radius * 0.8, radius: radius * 0.88, fill: 0x6735ad, edge: 0xa96af0 },
+      ];
+      smokeCircles = puffs.map((puff) => this.add.circle(x + puff.offsetX, surfaceY, puff.radius, puff.fill, 0.82)
+        .setOrigin(0.5, 1)
+        .setStrokeStyle(2, puff.edge, 0.8)
         .setDepth(1)
-        .play(HAZARD_SMOKE_ORB_ANIMATION);
-      visual.setOrigin(anchor.x, anchor.y);
+        .setScale(0.12)
+        .setAlpha(0));
+      this.tweens.add({
+        targets: smokeCircles,
+        scaleX: { from: 0.12, to: 1 },
+        scaleY: { from: 0.12, to: 1 },
+        alpha: { from: 0, to: 0.86 },
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
       shape.setVisible(false);
     } else if (kind === "laser") {
       const wallHeight = height + 10;
@@ -574,7 +577,7 @@ export class TrialScene extends Phaser.Scene {
     }
     const ring = kind === "saw" ? this.add.circle(x, y, Math.min(width, height) / 2 + 5, 0x39172a).setStrokeStyle(2, 0xff7853) : undefined;
     const hazard = {
-      shape, visual, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
+      shape, visual, smokeCircles, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
       period: Math.max(260, 420 - difficulty * 18), amplitude: Math.min(75 + difficulty * 5, 110),
     };
     this.hazards.push(hazard);
@@ -582,6 +585,7 @@ export class TrialScene extends Phaser.Scene {
       segment.hazards.push(hazard);
       segment.objects.push(shape);
       if (visual) segment.objects.push(visual);
+      if (smokeCircles) segment.objects.push(...smokeCircles);
       if (ring) segment.objects.push(ring);
     }
   }
@@ -934,17 +938,7 @@ export class TrialScene extends Phaser.Scene {
   private updateHazards(time: number) {
     for (const hazard of this.hazards) {
       if (hazard.moving) hazard.shape.x = hazard.baseX + Math.sin(time / hazard.period + hazard.phase) * hazard.amplitude;
-      if (hazard.visual) {
-        if (hazard.kind === "spike") {
-          const frameIndex = hazard.visual.anims.currentFrame?.index ?? 0;
-          const anchor = HAZARD_SMOKE_ORB_FRAME_ANCHORS[frameIndex] ?? HAZARD_SMOKE_ORB_FRAME_ANCHORS[0];
-          hazard.visual
-            .setPosition(hazard.shape.x, hazard.shape.y + hazard.shape.height / 2)
-            .setOrigin(anchor.x, anchor.y);
-        } else {
-          hazard.visual.x = hazard.shape.x;
-        }
-      }
+      if (hazard.visual) hazard.visual.x = hazard.shape.x;
       if (hazard.kind === "laser") {
         const active = Math.floor((time + hazard.phase * 200) / 1_000) % 2 === 0;
         hazard.shape.setAlpha(active ? 0.82 : 0.12);
@@ -952,7 +946,8 @@ export class TrialScene extends Phaser.Scene {
         hazard.visual?.setAlpha(active ? 1 : 0.2);
       }
       if (hazard.ring) hazard.ring.x = hazard.shape.x;
-      if (time > this.invulnerableUntil && this.rectanglesOverlap(this.player, hazard.shape) && (hazard.kind !== "laser" || hazard.shape.getData("active"))) {
+      const smokeActive = hazard.kind !== "spike" || (hazard.smokeCircles?.[0]?.alpha ?? 0) > 0.25;
+      if (smokeActive && time > this.invulnerableUntil && this.rectanglesOverlap(this.player, hazard.shape) && (hazard.kind !== "laser" || hazard.shape.getData("active"))) {
         this.die();
         return;
       }
