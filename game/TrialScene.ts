@@ -285,7 +285,7 @@ export class TrialScene extends Phaser.Scene {
     this.createEnemyAnimations();
     this.createEffectAnimations();
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT + 1_200);
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
+    this.setCameraBounds(WORLD_WIDTH);
     this.cameras.main.setZoom(1);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -372,8 +372,8 @@ export class TrialScene extends Phaser.Scene {
     this.playerArt = this.add.image(PLAYER_START_X, GROUND_TOP, PLAYER_TEXTURES.idle)
       .setOrigin(0.5, 1).setScale(PLAYER_ART_SCALE).setDepth(2);
     this.positionPlayerArt();
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.08, -250, 0);
-    this.cameras.main.setDeadzone(300, 130);
+    this.cameras.main.startFollow(this.player, true, 1, 0.08, 0, 0);
+    this.cameras.main.centerOn(this.player.x, this.cameras.main.midPoint.y);
 
     this.keys = this.input.keyboard!.addKeys({
       left: "LEFT", right: "RIGHT", jump: "SPACE", dash: "SHIFT", attack: "X",
@@ -494,13 +494,19 @@ export class TrialScene extends Phaser.Scene {
     for (const layer of this.backgroundLayers) layer.sprite.setTilePosition(cameraX * layer.parallax, 0);
   }
 
+  private setCameraBounds(worldRightEdge: number) {
+    const left = PLAYER_START_X - this.viewWidth / 2;
+    const right = Math.max(worldRightEdge, left + this.viewWidth);
+    this.cameras.main.setBounds(left, 0, right - left, VIEW_HEIGHT);
+  }
+
   private handleResize() {
     const width = this.scale.gameSize.width;
     if (!Number.isFinite(width) || width <= 0 || width === this.viewWidth) return;
     this.viewWidth = width;
     const boundsWidth = Math.max(this.worldEndX, width);
     this.physics.world.setBounds(0, 0, boundsWidth, VIEW_HEIGHT + 1_200);
-    this.cameras.main.setBounds(0, 0, boundsWidth, VIEW_HEIGHT);
+    this.setCameraBounds(this.worldEndX);
     for (const layer of this.backgroundLayers) {
       layer.sprite
         .setPosition(width / 2, VIEW_HEIGHT / 2)
@@ -726,7 +732,7 @@ export class TrialScene extends Phaser.Scene {
     this.generatedSegments.push(segment);
     this.worldEndX = end + CHUNK_AHEAD * this.viewWidth;
     this.physics.world.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT + 1_200);
-    this.cameras.main.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT);
+    this.setCameraBounds(this.worldEndX);
   }
 
   private addMotorcyclePickup(x: number, surfaceY: number, segment?: GeneratedSegment) {
@@ -1133,6 +1139,7 @@ export class TrialScene extends Phaser.Scene {
     }
     this.time.delayedCall(420, () => {
       this.player.setPosition(this.checkpointX, PLAYER_START_Y).setAlpha(1);
+      this.cameras.main.centerOn(this.player.x, this.cameras.main.midPoint.y);
       this.body.setVelocity(0, 0);
       this.body.setAllowGravity(true);
       this.playerArt.setTexture(PLAYER_TEXTURES.idle);
