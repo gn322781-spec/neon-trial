@@ -5,12 +5,12 @@ import { AudioFeedback } from "@/game/audio";
 import { Controls, type Action } from "@/game/controls";
 import type { TrialHud, TrialResult } from "@/game/TrialScene";
 
-const BUTTONS: { action: Action; label: string; className: string }[] = [
+const BUTTONS: { action: Action; label: string; className: string; icon?: string }[] = [
   { action: "left", label: "◀", className: "move" },
   { action: "right", label: "▶", className: "move" },
-  { action: "jump", label: "PULAR", className: "jump" },
-  { action: "dash", label: "DASH", className: "dash" },
-  { action: "attack", label: "ATQ", className: "attack" },
+  { action: "jump", label: "PULAR", className: "jump", icon: "cross" },
+  { action: "dash", label: "DASH", className: "dash", icon: "triangle" },
+  { action: "attack", label: "ATQ", className: "attack", icon: "square" },
 ];
 
 export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
@@ -142,9 +142,12 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
         </div>
         <div className="touch-group touch-actions">
           {BUTTONS.filter((item) => item.className !== "move").map((item) => (
-            <button key={item.action} className={`touch-button ${item.className}`} aria-label={item.action === "jump" ? "Pular" : item.action === "dash" ? "Dash" : "Atacar"}
+            <button key={item.action} className={`touch-button ${item.className} icon-action`} aria-label={item.action === "jump" ? "Pular" : item.action === "dash" ? "Dash" : "Atacar"}
               onPointerDown={(event) => press(event, item.action)} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>
-              {item.label}
+              {item.icon && <span className="touch-icon" aria-hidden="true">
+                <img src={`/ui/buttons/${item.icon}-1.png`} alt="" draggable={false} />
+                <img src={`/ui/buttons/${item.icon}-2.png`} alt="" draggable={false} />
+              </span>}
             </button>
           ))}
         </div>
