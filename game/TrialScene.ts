@@ -37,6 +37,7 @@ type GeneratedSegment = {
   checkpoint?: Phaser.GameObjects.Triangle;
   platforms: Phaser.GameObjects.Rectangle[];
   pickups: Phaser.GameObjects.Image[];
+  motorcyclePickups: Phaser.GameObjects.Image[];
   objects: Phaser.GameObjects.GameObject[];
   hazards: DamageHazard[];
   enemies: EnemyUnit[];
@@ -107,10 +108,46 @@ const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.dash]: 33 / 375,
 };
 const PLAYER_ART_GROUNDING_OVERLAP = 2;
-const ENEMY_SPRITE_SIZE = 168;
+const MOTORCYCLE_TEXTURE = "green-motorcycle";
+const MOTORCYCLE_MOUNT_TEXTURE = "motorcycle-mount";
+const MOTORCYCLE_RIDING_TEXTURE = "motorcycle-riding";
+const MOTORCYCLE_RIDE_FRAME_TEXTURES = [
+  "motorcycle-ride-frame-01",
+  "motorcycle-ride-frame-02",
+  "motorcycle-ride-frame-03",
+  "motorcycle-ride-frame-04",
+  "motorcycle-ride-frame-05",
+  "motorcycle-ride-frame-06",
+] as const;
+// Bottom row of the motorcycle wheels in each 528x540 source frame.
+const MOTORCYCLE_RIDE_FRAME_BASELINES = [520, 520, 520, 455, 454, 455] as const;
+const MOTORCYCLE_RIDE_FRAME_SOURCE_HEIGHT = 540;
+const MOTORCYCLE_RIDE_FRAME_SCALE = 0.26;
+const MOTORCYCLE_RIDE_FRAME_INTERVAL_MS = 110;
+const MOTORCYCLE_PICKUP_SIZE = { width: 124, height: 78 };
+const MOTORCYCLE_RIDE_SIZE = { width: 190, height: 119 };
+const MOTORCYCLE_RIDE_DURATION = 10_000;
+const MOTORCYCLE_MOUNT_DURATION = 650;
+const MOTORCYCLE_SPEED_MULTIPLIER = 1.45;
+const ENEMY_FRAME_SIZE = 150;
+const ENEMY_TARGET_VISIBLE_HEIGHT = 104;
+const ENEMY_VISIBLE_FRAME_BOUNDS: Record<EnemyKind, { height: number; bottom: number }> = {
+  goblin: { height: 36, bottom: 100 },
+  mushroom: { height: 37, bottom: 100 },
+  skeleton: { height: 51, bottom: 100 },
+  "flying-eye": { height: 31, bottom: 91 },
+};
 const ENEMY_KINDS: readonly EnemyKind[] = ["goblin", "mushroom", "skeleton", "flying-eye"];
 const ENEMY_ATTACK_RANGE: Record<EnemyKind, number> = { goblin: 84, mushroom: 92, skeleton: 80, "flying-eye": 104 };
 const ENEMY_MOVE_SPEED: Record<EnemyKind, number> = { goblin: 104, mushroom: 78, skeleton: 88, "flying-eye": 128 };
+
+function enemySpriteSize(kind: EnemyKind) {
+  return Math.round(ENEMY_TARGET_VISIBLE_HEIGHT * ENEMY_FRAME_SIZE / ENEMY_VISIBLE_FRAME_BOUNDS[kind].height);
+}
+
+function enemyGroundFootOffset(kind: Exclude<EnemyKind, "flying-eye">) {
+  return Math.round((ENEMY_VISIBLE_FRAME_BOUNDS[kind].bottom - ENEMY_FRAME_SIZE / 2) * enemySpriteSize(kind) / ENEMY_FRAME_SIZE);
+}
 
 function createSegmentRandom(index: number) {
   let state = Math.imul(index + 1, 0x9e3779b1) >>> 0;
@@ -131,6 +168,7 @@ export class TrialScene extends Phaser.Scene {
   private body!: Phaser.Physics.Arcade.Body;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private crystals!: Phaser.Physics.Arcade.StaticGroup;
+  private motorcycles!: Phaser.Physics.Arcade.StaticGroup;
   private readonly hazards: DamageHazard[] = [];
   private readonly generatedSegments: GeneratedSegment[] = [];
   private readonly enemies: EnemyUnit[] = [];
@@ -140,6 +178,10 @@ export class TrialScene extends Phaser.Scene {
   private readonly backgroundLayers: BackgroundLayer[] = [];
   private keys!: Keys;
   private playerArt!: Phaser.GameObjects.Image;
+  private motorcycleRideUntil = 0;
+  private motorcycleMountUntil = 0;
+  private motorcycleAnimationStartedAt = 0;
+  private motorcycleWasMoving = false;
   private previous: MobileSnapshot = { left: false, right: false, jump: false, dash: false, attack: false };
   private runStartedAt = 0;
   private checkpointX = 75;
@@ -180,6 +222,12 @@ export class TrialScene extends Phaser.Scene {
     this.load.image(ISLAND_SET_PIECES[0], "/space/island-4.webp");
     this.load.image(ISLAND_SET_PIECES[1], "/space/island-5.webp");
     this.load.image(PICKUP_TEXTURE, "/items/cigarette-pack.webp");
+    this.load.image(MOTORCYCLE_TEXTURE, "/vehicles/motorcycle.png");
+    this.load.image(MOTORCYCLE_MOUNT_TEXTURE, "/vehicles/motorcycle-mount.png");
+    this.load.image(MOTORCYCLE_RIDING_TEXTURE, "/vehicles/motorcycle-riding.png");
+    MOTORCYCLE_RIDE_FRAME_TEXTURES.forEach((key, index) => {
+      this.load.image(key, `/vehicles/riding-frames/moto_quadro_${String(index + 1).padStart(2, "0")}.png`);
+    });
     this.load.image(PLAYER_TEXTURES.idle, "/character/01_parado_idle.png");
     this.load.image(PLAYER_TEXTURES.walkOne, "/character/02_andando_passada_1.png");
     this.load.image(PLAYER_TEXTURES.walkTwo, "/character/03_andando_passada_2.png");
@@ -191,7 +239,7 @@ export class TrialScene extends Phaser.Scene {
     for (const kind of ENEMY_KINDS) {
       const root = `/monsters/${kind}`;
       for (const action of ["idle", "move", "attack", "hit", "death"] as const) {
-        this.load.spritesheet(`monster-${kind}-${action}-sheet`, `${root}/${action}.png`, { frameWidth: 150, frameHeight: 150 });
+        this.load.spritesheet(`monster-${kind}-${action}-sheet`, `${root}/${action}.png`, { frameWidth: ENEMY_FRAME_SIZE, frameHeight: ENEMY_FRAME_SIZE });
       }
     }
   }
@@ -209,6 +257,7 @@ export class TrialScene extends Phaser.Scene {
 
     this.platforms = this.physics.add.staticGroup();
     this.crystals = this.physics.add.staticGroup();
+    this.motorcycles = this.physics.add.staticGroup();
     for (const [zoneIndex, zone] of ZONES.entries()) {
       for (const [platformIndex, platform] of zone.platforms.entries()) {
         const height = platform.height ?? 60;
@@ -226,6 +275,13 @@ export class TrialScene extends Phaser.Scene {
       for (const enemy of zone.enemies) {
         this.addEnemy(enemy);
       }
+      const longPlatform = zone.platforms
+        .filter((platform) => platform.width >= 250 && platform.x >= zone.start + 450)
+        .sort((left, right) => right.width - left.width)[0];
+      if (longPlatform) {
+        const height = longPlatform.height ?? 60;
+        this.addMotorcyclePickup(longPlatform.x, longPlatform.y - height / 2);
+      }
       this.add.text(zone.start + 34, 92, zone.name, { fontFamily: "monospace", fontSize: "18px", color: "#6ff6ff", letterSpacing: 2 })
         .setScrollFactor(1).setDepth(1);
       this.add.rectangle(zone.start, 270, 2, 390, 0x37657c, 0.5);
@@ -242,6 +298,7 @@ export class TrialScene extends Phaser.Scene {
     this.body.setGravityY(PHYSICS.gravity);
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.overlap(this.player, this.crystals, (_player, crystal) => this.collect(crystal as Phaser.GameObjects.Image), undefined, this);
+    this.physics.add.overlap(this.player, this.motorcycles, (_player, motorcycle) => this.collectMotorcycle(motorcycle as Phaser.GameObjects.Image), undefined, this);
     this.playerArt = this.add.image(PLAYER_START_X, GROUND_TOP, PLAYER_TEXTURES.idle)
       .setOrigin(0.5, 1).setScale(PLAYER_ART_SCALE).setDepth(2);
     this.positionPlayerArt();
@@ -281,10 +338,13 @@ export class TrialScene extends Phaser.Scene {
     const flying = spec.kind === "flying-eye";
     const minX = spec.minX ?? spec.x - 105;
     const maxX = spec.maxX ?? spec.x + 105;
-    const sprite = this.add.sprite(spec.x, flying ? spec.y : spec.y - 28, `monster-${spec.kind}-idle-sheet`)
-      .setDisplaySize(ENEMY_SPRITE_SIZE, ENEMY_SPRITE_SIZE)
+    const spriteSize = enemySpriteSize(spec.kind);
+    const groundFootOffset = spec.kind === "flying-eye" ? 0 : enemyGroundFootOffset(spec.kind);
+    const enemyCenterOffset = spec.kind === "flying-eye" ? 0 : ENEMY_TARGET_VISIBLE_HEIGHT / 2;
+    const sprite = this.add.sprite(spec.x, flying ? spec.y : spec.y - groundFootOffset, `monster-${spec.kind}-idle-sheet`)
+      .setDisplaySize(spriteSize, spriteSize)
       .setDepth(2);
-    const hitbox = this.add.rectangle(spec.x, flying ? spec.y : spec.y - 24, flying ? 48 : 46, flying ? 46 : 52, 0, 0)
+    const hitbox = this.add.rectangle(spec.x, spec.y - enemyCenterOffset, flying ? 48 : 46, flying ? 46 : 52, 0, 0)
       .setVisible(false)
       .setDepth(1);
     const enemy: EnemyUnit = {
@@ -400,6 +460,7 @@ export class TrialScene extends Phaser.Scene {
       if (segment.end >= this.checkpointX - SEGMENT_LENGTH || segment.renderEnd >= cameraLeft - 200) continue;
       for (const platform of segment.platforms) this.platforms.remove(platform, true, true);
       for (const pickup of segment.pickups) this.crystals.remove(pickup, true, true);
+      for (const pickup of segment.motorcyclePickups) this.motorcycles.remove(pickup, true, true);
       for (const hazard of segment.hazards) {
         const hazardIndex = this.hazards.indexOf(hazard);
         if (hazardIndex >= 0) this.hazards.splice(hazardIndex, 1);
@@ -428,6 +489,10 @@ export class TrialScene extends Phaser.Scene {
     const widthFactors = [0.82 + random() * 0.36, 0.82 + random() * 0.36, 0.82 + random() * 0.36];
     const widthFactorTotal = widthFactors.reduce((total, factor) => total + factor, 0);
     const platformWidths = widthFactors.map((factor) => availableWidth * factor / widthFactorTotal);
+    const widestPlatformWidth = Math.max(...platformWidths);
+    const motorcyclePlatformPart = index % 3 === 1 && widestPlatformWidth >= 260
+      ? platformWidths.indexOf(widestPlatformWidth)
+      : -1;
     const secondHeight = 420 + Math.floor(random() * 61);
     const thirdHeight = Phaser.Math.Clamp(secondHeight + Math.floor(random() * 91) - 45, 420, 480);
     const segment: GeneratedSegment = {
@@ -437,6 +502,7 @@ export class TrialScene extends Phaser.Scene {
       checkpointX: start + 80,
       platforms: [],
       pickups: [],
+      motorcyclePickups: [],
       objects: [],
       hazards: [],
       enemies: [],
@@ -459,7 +525,8 @@ export class TrialScene extends Phaser.Scene {
       this.addIslandPlatform(center, surfaceY, width, 60, variant, segment);
       platforms.push({ center, surfaceY, width });
 
-      const pickup = this.add.image(center, surfaceY - 24, PICKUP_TEXTURE).setDisplaySize(24, 40).setDepth(1);
+      const pickupX = part === motorcyclePlatformPart ? center - width * 0.22 : center;
+      const pickup = this.add.image(pickupX, surfaceY - 24, PICKUP_TEXTURE).setDisplaySize(24, 40).setDepth(1);
       pickup.setData("crystalId", `endless-${index}-${part}`);
       this.crystals.add(pickup);
       (pickup.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
@@ -469,9 +536,15 @@ export class TrialScene extends Phaser.Scene {
       left += width + gap;
     }
 
+    if (motorcyclePlatformPart >= 0) {
+      const platform = platforms[motorcyclePlatformPart];
+      this.addMotorcyclePickup(platform.center + platform.width * 0.22, platform.surfaceY, segment);
+    }
+
     const hazardCount = Math.min(3 + Math.floor(index / 2), 6);
     for (let obstacle = 0; obstacle < hazardCount; obstacle += 1) {
       const platformIndex = obstacle % platforms.length;
+      if (platformIndex === motorcyclePlatformPart) continue;
       const slot = Math.floor(obstacle / platforms.length);
       const firstSlotSide = platformIndex === 0 ? 1 : -1;
       const side = slot % 2 === 0 ? firstSlotSide : -firstSlotSide;
@@ -482,9 +555,11 @@ export class TrialScene extends Phaser.Scene {
       this.addHazard(x, surfaceY - (kind === "laser" ? 55 : 15), kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
     }
 
+    const availableEnemyPlatforms = platforms.filter((_platform, part) => part !== motorcyclePlatformPart);
+    const enemyPlatforms = availableEnemyPlatforms.length ? availableEnemyPlatforms : platforms;
     const monsterCount = difficulty >= 4 && random() > 0.62 ? 2 : 1;
     for (let encounter = 0; encounter < monsterCount; encounter += 1) {
-      const platform = platforms[(encounter + Math.floor(random() * platforms.length)) % platforms.length];
+      const platform = enemyPlatforms[(encounter + Math.floor(random() * enemyPlatforms.length)) % enemyPlatforms.length];
       const kind = ENEMY_KINDS[Math.floor(random() * ENEMY_KINDS.length)];
       const minX = platform.center - platform.width / 2 + 26;
       const maxX = platform.center + platform.width / 2 - 26;
@@ -507,6 +582,41 @@ export class TrialScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT);
   }
 
+  private addMotorcyclePickup(x: number, surfaceY: number, segment?: GeneratedSegment) {
+    const pickup = this.add.image(x, surfaceY, MOTORCYCLE_TEXTURE)
+      .setOrigin(0.5, 1)
+      .setDisplaySize(MOTORCYCLE_PICKUP_SIZE.width, MOTORCYCLE_PICKUP_SIZE.height)
+      .setDepth(1);
+    this.motorcycles.add(pickup);
+    (pickup.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+    segment?.motorcyclePickups.push(pickup);
+  }
+
+  private collectMotorcycle(pickup: Phaser.GameObjects.Image) {
+    if (this.motorcycleRideUntil > this.time.now || !pickup.active) return;
+    this.motorcycles.remove(pickup, true, true);
+    this.motorcycleRideUntil = this.time.now + MOTORCYCLE_RIDE_DURATION;
+    this.motorcycleMountUntil = this.time.now + MOTORCYCLE_MOUNT_DURATION;
+    this.motorcycleAnimationStartedAt = this.motorcycleMountUntil;
+    this.motorcycleWasMoving = false;
+    this.audio.play("crystal");
+    this.playerArt.setTexture(MOTORCYCLE_MOUNT_TEXTURE)
+      .setOrigin(0.5, 1)
+      .setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height)
+      .setDepth(2);
+    this.positionPlayerArt();
+  }
+
+  private endMotorcycleRide() {
+    if (!this.motorcycleRideUntil) return;
+    this.motorcycleRideUntil = 0;
+    this.motorcycleMountUntil = 0;
+    this.motorcycleAnimationStartedAt = 0;
+    this.motorcycleWasMoving = false;
+    this.playerArt.setTexture(PLAYER_TEXTURES.idle).setScale(PLAYER_ART_SCALE);
+    this.positionPlayerArt();
+  }
+
   private collect(crystal: Phaser.GameObjects.Image) {
     const id = crystal.getData("crystalId") as string | undefined;
     if (!id || !this.award("crystal", `crystal:${id}`)) return;
@@ -517,6 +627,7 @@ export class TrialScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     if (this.finished || this.respawning) return;
+    if (this.motorcycleRideUntil && time >= this.motorcycleRideUntil) this.endMotorcycleRide();
     this.updateBackdrop();
     this.ensureWorldAhead();
     const keyboard = this.keys;
@@ -537,6 +648,7 @@ export class TrialScene extends Phaser.Scene {
     if (justPressed("jump")) this.jumpBufferUntil = time + PHYSICS.jumpBufferMs;
 
     const direction = Number(input.right) - Number(input.left);
+    const ridingMotorcycle = this.motorcycleRideUntil > time;
     if (grounded && this.wasAirborne) {
       this.landingUntil = time + 190;
       this.wasAirborne = false;
@@ -548,9 +660,9 @@ export class TrialScene extends Phaser.Scene {
       this.body.setAllowGravity(false);
     } else {
       this.body.setAllowGravity(true);
-      if (direction) this.body.setAccelerationX(direction * PHYSICS.acceleration);
+      if (direction) this.body.setAccelerationX(direction * PHYSICS.acceleration * (ridingMotorcycle ? MOTORCYCLE_SPEED_MULTIPLIER : 1));
       else this.body.setAccelerationX(0).setDragX(PHYSICS.friction);
-      this.body.setMaxVelocityX(PHYSICS.runSpeed);
+      this.body.setMaxVelocityX(PHYSICS.runSpeed * (ridingMotorcycle ? MOTORCYCLE_SPEED_MULTIPLIER : 1));
 
       if (time < this.jumpBufferUntil && (time < this.coyoteUntil || grounded)) {
         this.body.setVelocityY(-PHYSICS.jumpSpeed);
@@ -600,19 +712,60 @@ export class TrialScene extends Phaser.Scene {
 
   private updatePlayerArt(time: number, grounded: boolean, direction: number, crouching: boolean) {
     let texture: string = PLAYER_TEXTURES.idle;
-    if (time < this.dashUntil || time < this.attackUntil) texture = PLAYER_TEXTURES.dash;
+    const ridingMotorcycle = time < this.motorcycleRideUntil;
+    let motorcycleAnimationFrame = false;
+    if (ridingMotorcycle && time < this.motorcycleMountUntil) {
+      this.motorcycleWasMoving = false;
+      texture = MOTORCYCLE_MOUNT_TEXTURE;
+    } else if (ridingMotorcycle && Math.abs(this.body.velocity.x) > 24) {
+      if (!this.motorcycleWasMoving) {
+        this.motorcycleAnimationStartedAt = time;
+        this.motorcycleWasMoving = true;
+      }
+      const frameIndex = Math.floor((time - this.motorcycleAnimationStartedAt) / MOTORCYCLE_RIDE_FRAME_INTERVAL_MS)
+        % MOTORCYCLE_RIDE_FRAME_TEXTURES.length;
+      texture = MOTORCYCLE_RIDE_FRAME_TEXTURES[frameIndex];
+      motorcycleAnimationFrame = true;
+    } else if (ridingMotorcycle) {
+      this.motorcycleWasMoving = false;
+      texture = MOTORCYCLE_RIDING_TEXTURE;
+    } else if (time < this.dashUntil || time < this.attackUntil) texture = PLAYER_TEXTURES.dash;
     else if (grounded && crouching) texture = PLAYER_TEXTURES.crouch;
     else if (grounded && time < this.landingUntil) texture = PLAYER_TEXTURES.landing;
     else if (!grounded) texture = this.body.velocity.y < 0 ? PLAYER_TEXTURES.jumpRise : PLAYER_TEXTURES.jumpAir;
     else if (direction) texture = Math.floor(time / 150) % 2 === 0 ? PLAYER_TEXTURES.walkOne : PLAYER_TEXTURES.walkTwo;
 
-    if (this.playerArt.texture.key !== texture) this.playerArt.setTexture(texture);
+    if (this.playerArt.texture.key !== texture) {
+      this.playerArt.setTexture(texture);
+      if (motorcycleAnimationFrame) this.playerArt.setScale(MOTORCYCLE_RIDE_FRAME_SCALE);
+      else if (ridingMotorcycle) this.playerArt.setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height);
+      else this.playerArt.setScale(PLAYER_ART_SCALE);
+    }
     this.positionPlayerArt();
     this.playerArt.setFlipX(this.facing < 0);
     this.playerArt.setAlpha(this.respawning ? 0.55 : 1);
   }
 
   private positionPlayerArt() {
+    const rideFrameIndex = MOTORCYCLE_RIDE_FRAME_TEXTURES.findIndex((key) => key === this.playerArt.texture.key);
+    if (rideFrameIndex >= 0) {
+      const groundOffset = (MOTORCYCLE_RIDE_FRAME_SOURCE_HEIGHT - MOTORCYCLE_RIDE_FRAME_BASELINES[rideFrameIndex])
+        * MOTORCYCLE_RIDE_FRAME_SCALE;
+      this.playerArt.setPosition(
+        this.player.x,
+        this.player.y + PLAYER_ART_FOOT_OFFSET + PLAYER_ART_GROUNDING_OVERLAP + groundOffset,
+      );
+      this.playerArt.setFlipX(this.facing < 0);
+      return;
+    }
+    if (this.playerArt.texture.key === MOTORCYCLE_MOUNT_TEXTURE || this.playerArt.texture.key === MOTORCYCLE_RIDING_TEXTURE) {
+      this.playerArt.setPosition(
+        this.player.x,
+        this.player.y + PLAYER_ART_FOOT_OFFSET + PLAYER_ART_GROUNDING_OVERLAP,
+      );
+      this.playerArt.setFlipX(this.facing < 0);
+      return;
+    }
     const bottomMargin = PLAYER_TEXTURE_BOTTOM_MARGIN[this.playerArt.texture.key] ?? 0;
     const visibleFootOffset = this.playerArt.displayHeight * bottomMargin;
     this.playerArt.setPosition(
@@ -715,7 +868,7 @@ export class TrialScene extends Phaser.Scene {
           enemy.sprite.x = Phaser.Math.Clamp(nextX, enemy.minX, enemy.maxX);
           moving = Math.abs(enemy.sprite.x - previousX) > 0.1;
         }
-        enemy.hitbox.setPosition(enemy.sprite.x, enemy.baseY - 24);
+        enemy.hitbox.setPosition(enemy.sprite.x, enemy.baseY - ENEMY_TARGET_VISIBLE_HEIGHT / 2);
       }
 
       enemy.sprite.setFlipX(enemy.direction < 0);
@@ -807,6 +960,7 @@ export class TrialScene extends Phaser.Scene {
   private die() {
     if (this.respawning || this.finished || performance.now() < this.invulnerableUntil) return;
     this.respawning = true;
+    this.endMotorcycleRide();
     this.deaths += 1;
     this.audio.play("death");
     this.audio.haptic(110);
@@ -871,3 +1025,4 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
+
