@@ -33,17 +33,21 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
       if (cancelled || !hostRef.current) return;
       const Phaser = PhaserModule;
       const scene = new TrialScene(controls, audio, onHud, onResult);
+      const stage = hostRef.current.parentElement;
+      const gameHeight = 540;
+      const stageRatio = stage && stage.clientHeight > 0 ? stage.clientWidth / stage.clientHeight : 16 / 9;
+      const gameWidth = Math.max(320, Math.round(gameHeight * stageRatio));
       game = new Phaser.Game({
         type: Phaser.AUTO,
         parent: hostRef.current,
         backgroundColor: "#070d19",
-        width: 960,
-        height: 540,
+        width: gameWidth,
+        height: gameHeight,
         scale: {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
-          width: 960,
-          height: 540,
+          width: gameWidth,
+          height: gameHeight,
         },
         physics: { default: "arcade", arcade: { gravity: { x: 0, y: 0 }, debug: false } },
         render: { antialias: true, pixelArt: false, powerPreference: "high-performance" },
