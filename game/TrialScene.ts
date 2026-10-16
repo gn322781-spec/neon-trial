@@ -207,7 +207,6 @@ export class TrialScene extends Phaser.Scene {
   private respawning = false;
   private finished = false;
   private attackUntil = 0;
-  private attackVisual?: Phaser.GameObjects.Rectangle;
   private wasAirborne = false;
   private landingUntil = 0;
   private viewWidth = VIEW_WIDTH;
@@ -743,7 +742,6 @@ export class TrialScene extends Phaser.Scene {
     }
 
     if (justPressed("attack")) this.startAttack(time);
-    this.updateAttack(time);
     this.updateHazards(time);
     if (this.respawning || this.finished) {
       this.previous = input;
@@ -949,9 +947,6 @@ export class TrialScene extends Phaser.Scene {
   private startAttack(time: number) {
     this.attackUntil = time + 180;
     this.audio.play("attack");
-    this.attackVisual?.destroy();
-    this.attackVisual = this.add.rectangle(this.player.x + this.facing * 28, this.player.y, 48, 34, 0x88f7ff, 0.3)
-      .setStrokeStyle(2, 0x9fffff).setDepth(2);
     for (const enemy of this.enemies) {
       if (!enemy.sprite.active || enemy.state === "dying") continue;
       const dx = enemy.sprite.x - this.player.x;
@@ -978,16 +973,6 @@ export class TrialScene extends Phaser.Scene {
     this.playEffect("fx-enemy-explosion", enemy.sprite.x, enemy.sprite.y, 80);
     this.playEnemyAnimation(enemy, "death");
     this.award("target", `target:${enemy.id}`);
-  }
-
-  private updateAttack(time: number) {
-    if (!this.attackVisual) return;
-    if (time >= this.attackUntil) {
-      this.attackVisual.destroy();
-      this.attackVisual = undefined;
-    } else {
-      this.attackVisual.setPosition(this.player.x + this.facing * 28, this.player.y);
-    }
   }
 
   private updateProgress() {
