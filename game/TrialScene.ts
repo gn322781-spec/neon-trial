@@ -80,11 +80,12 @@ const BACKGROUND_LAYERS = [
   { key: "forest-color-filter", path: "/forest/layers/color-filter.png", parallax: 0, depth: -22, alpha: 1 },
 ] as const;
 const ISLAND_PLATFORMS = [
-  { key: "forest-island-1", surface: 0.01 },
-  { key: "forest-island-2", surface: 0.745 },
-  { key: "forest-island-3", surface: 0.01 },
+  { key: "space-island-1", surface: 0.46 },
+  { key: "space-island-2", surface: 0.012 },
+  { key: "space-island-3", surface: 0.288 },
+  { key: "space-island-6", surface: 0.342 },
 ] as const;
-const ISLAND_SET_PIECES = ["forest-island-1", "forest-island-3"] as const;
+const ISLAND_SET_PIECES = ["space-island-4", "space-island-5"] as const;
 const PLAYER_TEXTURES = {
   idle: "player-idle",
   walkOne: "player-walk-one",
@@ -173,8 +174,11 @@ export class TrialScene extends Phaser.Scene {
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
     for (let index = 0; index < ISLAND_PLATFORMS.length; index += 1) {
-      this.load.image(ISLAND_PLATFORMS[index].key, `/forest/island-${index + 1}.png`);
+      const islandNumber = index === 3 ? 6 : index + 1;
+      this.load.image(ISLAND_PLATFORMS[index].key, `/space/island-${islandNumber}.webp`);
     }
+    this.load.image(ISLAND_SET_PIECES[0], "/space/island-4.webp");
+    this.load.image(ISLAND_SET_PIECES[1], "/space/island-5.webp");
     this.load.image(PICKUP_TEXTURE, "/items/cigarette-pack.webp");
     this.load.image(PLAYER_TEXTURES.idle, "/character/01_parado_idle.png");
     this.load.image(PLAYER_TEXTURES.walkOne, "/character/02_andando_passada_1.png");
