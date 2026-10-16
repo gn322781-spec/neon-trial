@@ -1,10 +1,11 @@
-export type SoundCue = "jump" | "dash" | "attack" | "crystal" | "hit" | "death" | "checkpoint" | "zone" | "complete";
+export type SoundCue = "jump" | "dash" | "attack" | "crystal" | "motorcycle" | "hit" | "death" | "checkpoint" | "zone" | "complete";
 
 const CUES: Record<SoundCue, { frequency: number; duration: number; wave: OscillatorType; volume: number }> = {
   jump: { frequency: 430, duration: 0.085, wave: "square", volume: 0.055 },
   dash: { frequency: 185, duration: 0.14, wave: "sawtooth", volume: 0.065 },
   attack: { frequency: 275, duration: 0.065, wave: "triangle", volume: 0.05 },
   crystal: { frequency: 760, duration: 0.11, wave: "sine", volume: 0.07 },
+  motorcycle: { frequency: 220, duration: 0.24, wave: "sawtooth", volume: 0.07 },
   hit: { frequency: 165, duration: 0.14, wave: "square", volume: 0.06 },
   death: { frequency: 92, duration: 0.24, wave: "triangle", volume: 0.075 },
   checkpoint: { frequency: 620, duration: 0.16, wave: "sine", volume: 0.06 },
@@ -15,6 +16,7 @@ const CUES: Record<SoundCue, { frequency: number; duration: number; wave: Oscill
 export class AudioFeedback {
   private context: AudioContext | null = null;
   private deathAudio: HTMLAudioElement | null = null;
+  private motorcycleAudio: HTMLAudioElement | null = null;
   private currentVolume = 0.65;
   private vibrationOn = false;
 
@@ -33,6 +35,7 @@ export class AudioFeedback {
   setVolume(value: number) {
     this.currentVolume = Math.max(0, Math.min(1, value));
     if (this.deathAudio) this.deathAudio.volume = this.currentVolume;
+    if (this.motorcycleAudio) this.motorcycleAudio.volume = this.currentVolume;
     if (typeof window !== "undefined") window.localStorage.setItem("neon-trial-volume", String(this.currentVolume));
   }
 
@@ -51,6 +54,19 @@ export class AudioFeedback {
   }
 
   play(cue: SoundCue) {
+    if (cue === "motorcycle") {
+      const audio = this.ensureMotorcycleAudio();
+      if (audio && this.currentVolume > 0) {
+        audio.volume = this.currentVolume;
+        try {
+          audio.currentTime = 0;
+          void audio.play().catch(() => this.playTone("motorcycle"));
+        } catch {
+          this.playTone("motorcycle");
+        }
+        return;
+      }
+    }
     if (cue === "death") {
       const audio = this.ensureDeathAudio();
       if (audio && this.currentVolume > 0) {
@@ -77,6 +93,17 @@ export class AudioFeedback {
     audio.preload = "auto";
     audio.load();
     this.deathAudio = audio;
+    return audio;
+  }
+
+  private ensureMotorcycleAudio() {
+    if (typeof window === "undefined") return null;
+    if (this.motorcycleAudio) return this.motorcycleAudio;
+
+    const audio = new window.Audio("/sounds/motorcycle-pickup.mp3");
+    audio.preload = "auto";
+    audio.load();
+    this.motorcycleAudio = audio;
     return audio;
   }
 
