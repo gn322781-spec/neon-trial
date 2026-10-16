@@ -24,7 +24,13 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
   const activePointers = useRef(new Map<number, Action>());
 
   useEffect(() => {
-    let game: { destroy: (removeCanvas: boolean, noReturn?: boolean) => void } | undefined;
+    let game: {
+      destroy: (removeCanvas: boolean, noReturn?: boolean) => void;
+      scale: { setGameSize: (width: number, height: number) => unknown };
+    } | undefined;
+    let resizeObserver: ResizeObserver | undefined;
+    let scheduleResize: (() => void) | undefined;
+    let resizeFrame = 0;
     let cancelled = false;
     const pointers = activePointers.current;
     void (async () => {
@@ -35,29 +41,60 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
       const scene = new TrialScene(controls, audio, onHud, onResult);
       const stage = hostRef.current.parentElement;
       const gameHeight = 540;
-      const stageRatio = stage && stage.clientHeight > 0 ? stage.clientWidth / stage.clientHeight : 16 / 9;
-      const gameWidth = Math.max(320, Math.round(gameHeight * stageRatio));
+      const measureGameSize = () => {
+        const stageWidth = stage?.clientWidth ?? 0;
+        const stageHeight = stage?.clientHeight ?? 0;
+        if (stageWidth <= 0 || stageHeight <= 0) return null;
+        return { width: Math.max(320, Math.round(gameHeight * stageWidth / stageHeight)), height: gameHeight };
+      };
+      const initialSize = measureGameSize() ?? { width: Math.round(gameHeight * 16 / 9), height: gameHeight };
+      let currentWidth = initialSize.width;
       game = new Phaser.Game({
         type: Phaser.AUTO,
         parent: hostRef.current,
         backgroundColor: "#070d19",
-        width: gameWidth,
+        width: initialSize.width,
         height: gameHeight,
         scale: {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
-          width: gameWidth,
+          width: initialSize.width,
           height: gameHeight,
         },
         physics: { default: "arcade", arcade: { gravity: { x: 0, y: 0 }, debug: false } },
         render: { antialias: true, pixelArt: false, powerPreference: "high-performance" },
         scene: [scene],
       });
+      const resizeGame = () => {
+        resizeFrame = 0;
+        if (!game) return;
+        const nextSize = measureGameSize();
+        if (!nextSize || nextSize.width === currentWidth) return;
+        currentWidth = nextSize.width;
+        game.scale.setGameSize(nextSize.width, nextSize.height);
+      };
+      const onResize = () => {
+        if (resizeFrame) return;
+        resizeFrame = window.requestAnimationFrame(resizeGame);
+      };
+      scheduleResize = onResize;
+      if (stage && typeof ResizeObserver !== "undefined") {
+        resizeObserver = new ResizeObserver(onResize);
+        resizeObserver.observe(stage);
+      }
+      window.addEventListener("resize", onResize);
+      window.addEventListener("orientationchange", onResize);
     })();
     return () => {
       cancelled = true;
       pointers.clear();
       controls.releaseAll();
+      resizeObserver?.disconnect();
+      if (scheduleResize) {
+        window.removeEventListener("resize", scheduleResize);
+        window.removeEventListener("orientationchange", scheduleResize);
+      }
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
       game?.destroy(true);
     };
   }, [runId, controls, audio, onHud, onResult]);

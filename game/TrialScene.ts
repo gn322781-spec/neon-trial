@@ -250,6 +250,10 @@ export class TrialScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT + 1_200);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     this.cameras.main.setZoom(1);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    });
     this.drawBackdrop();
     this.addFloatingSetPiece(620, 52, 210, ISLAND_SET_PIECES[0]);
     this.addFloatingSetPiece(1_900, 58, 185, ISLAND_SET_PIECES[1]);
@@ -391,6 +395,22 @@ export class TrialScene extends Phaser.Scene {
   private updateBackdrop() {
     const cameraX = this.cameras.main.scrollX;
     for (const layer of this.backgroundLayers) layer.sprite.setTilePosition(cameraX * layer.parallax, 0);
+  }
+
+  private handleResize() {
+    const width = this.scale.gameSize.width;
+    if (!Number.isFinite(width) || width <= 0 || width === this.viewWidth) return;
+    this.viewWidth = width;
+    const boundsWidth = Math.max(this.worldEndX, width);
+    this.physics.world.setBounds(0, 0, boundsWidth, VIEW_HEIGHT + 1_200);
+    this.cameras.main.setBounds(0, 0, boundsWidth, VIEW_HEIGHT);
+    for (const layer of this.backgroundLayers) {
+      layer.sprite
+        .setPosition(width / 2, VIEW_HEIGHT / 2)
+        .setSize(width, VIEW_HEIGHT)
+        .setTileScale(Math.max(width / 2_000, VIEW_HEIGHT / 400));
+    }
+    this.updateBackdrop();
   }
 
   private addIslandPlatform(x: number, surfaceY: number, width: number, height: number, variantIndex: number, segment?: GeneratedSegment) {
