@@ -14,6 +14,7 @@ const CUES: Record<SoundCue, { frequency: number; duration: number; wave: Oscill
 
 export class AudioFeedback {
   private context: AudioContext | null = null;
+  private deathAudio: HTMLAudioElement | null = null;
   private currentVolume = 0.65;
   private vibrationOn = false;
 
@@ -31,6 +32,7 @@ export class AudioFeedback {
 
   setVolume(value: number) {
     this.currentVolume = Math.max(0, Math.min(1, value));
+    if (this.deathAudio) this.deathAudio.volume = this.currentVolume;
     if (typeof window !== "undefined") window.localStorage.setItem("neon-trial-volume", String(this.currentVolume));
   }
 
@@ -41,6 +43,7 @@ export class AudioFeedback {
 
   async unlock() {
     if (typeof window === "undefined") return;
+    this.ensureDeathAudio();
     const Context = window.AudioContext;
     if (!Context) return;
     this.context ??= new Context();
@@ -48,6 +51,36 @@ export class AudioFeedback {
   }
 
   play(cue: SoundCue) {
+    if (cue === "death") {
+      const audio = this.ensureDeathAudio();
+      if (audio && this.currentVolume > 0) {
+        audio.volume = this.currentVolume;
+        try {
+          audio.currentTime = 0;
+          void audio.play().catch(() => this.playTone("death"));
+        } catch {
+          this.playTone("death");
+        }
+        return;
+      }
+    }
+    this.playTone(cue);
+  }
+
+  private ensureDeathAudio() {
+    if (typeof window === "undefined") return null;
+    if (this.deathAudio) return this.deathAudio;
+
+    const audio = new window.Audio();
+    if (!audio.canPlayType('audio/ogg; codecs="opus"')) return null;
+    audio.src = "/sounds/morri_3.ogg";
+    audio.preload = "auto";
+    audio.load();
+    this.deathAudio = audio;
+    return audio;
+  }
+
+  private playTone(cue: SoundCue) {
     if (!this.context || this.context.state !== "running" || this.currentVolume <= 0) return;
     const setting = CUES[cue];
     const oscillator = this.context.createOscillator();
