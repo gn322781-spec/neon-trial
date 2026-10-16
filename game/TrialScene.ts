@@ -10,7 +10,7 @@ export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: n
 export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameVersion: string; events: AttemptEvent[]; zonesCompleted: number };
 
 type MobileSnapshot = ReturnType<Controls["snapshot"]>;
-type DamageHazard = { shape: Phaser.GameObjects.Rectangle; smokePuffs?: Phaser.GameObjects.Sprite[]; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
+type DamageHazard = { shape: Phaser.GameObjects.Rectangle; visual?: Phaser.GameObjects.Sprite; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
 type EnemyState = "patrol" | "approach" | "attack" | "hit" | "dying";
 type EnemyUnit = {
   id: string;
@@ -122,6 +122,17 @@ const PLAYER_ART_GROUNDING_OVERLAP = 2;
 const MOTORCYCLE_TEXTURE = "green-motorcycle";
 const MOTORCYCLE_MOUNT_TEXTURE = "motorcycle-mount";
 const MOTORCYCLE_RIDING_TEXTURE = "motorcycle-riding";
+const HAZARD_SMOKE_ORB_SHEET = "hazard-smoke-orb-sheet";
+const HAZARD_SMOKE_ORB_ANIMATION = "hazard-smoke-orb";
+// Visible center and bottom of the six smoke orb frames in the 512px cells.
+const HAZARD_SMOKE_ORB_FRAME_ANCHORS = [
+  { x: 271.5 / 512, y: 458 / 512 },
+  { x: 259 / 512, y: 457 / 512 },
+  { x: 247.5 / 512, y: 457 / 512 },
+  { x: 270.5 / 512, y: 435 / 512 },
+  { x: 261.5 / 512, y: 435 / 512 },
+  { x: 251.5 / 512, y: 439 / 512 },
+] as const;
 const GAME_EFFECTS = [
   { key: "fx-attack-impact", path: "/effects/gigapack/directional_impact_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 7 },
   { key: "fx-player-impact", path: "/effects/gigapack/symmetrical_impact_001_small_yellow.png", frameWidth: 48, frameHeight: 48, frameCount: 7 },
@@ -233,6 +244,7 @@ export class TrialScene extends Phaser.Scene {
 
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
+    this.load.spritesheet(HAZARD_SMOKE_ORB_SHEET, "/obstacles/smoke-orb-sheet.png", { frameWidth: 512, frameHeight: 512 });
     for (const effect of GAME_EFFECTS) {
       this.load.spritesheet(effect.key, effect.path, { frameWidth: effect.frameWidth, frameHeight: effect.frameHeight });
     }
@@ -321,10 +333,9 @@ export class TrialScene extends Phaser.Scene {
             })
             .sort((left, right) => left.gap - right.gap || left.distanceFromHazard - right.distanceFromHazard)[0];
           if (platform?.gap === 0) {
-            const smokeSize = Math.min(hazard.width * 1.4, hazard.height * 1.5);
-            const smokeHalfWidth = smokeSize * 0.68;
-            const minX = platform.left + smokeHalfWidth;
-            const maxX = platform.right - smokeHalfWidth;
+            const orbRadius = (Math.max(hazard.width, hazard.height) + 14) / 2;
+            const minX = platform.left + orbRadius;
+            const maxX = platform.right - orbRadius;
             x = minX <= maxX ? Phaser.Math.Clamp(hazard.x, minX, maxX) : (platform.left + platform.right) / 2;
             y = platform.surfaceY - hazard.height / 2;
           }
@@ -401,6 +412,14 @@ export class TrialScene extends Phaser.Scene {
         frames: this.anims.generateFrameNumbers(effect.key, { start: 0, end: effect.frameCount - 1 }),
         frameRate: 15,
         repeat: 0,
+      });
+    }
+    if (!this.anims.exists(HAZARD_SMOKE_ORB_ANIMATION)) {
+      this.anims.create({
+        key: HAZARD_SMOKE_ORB_ANIMATION,
+        frames: this.anims.generateFrameNumbers(HAZARD_SMOKE_ORB_SHEET, { start: 0, end: HAZARD_SMOKE_ORB_FRAME_ANCHORS.length - 1 }),
+        frameRate: 8,
+        repeat: -1,
       });
     }
   }
@@ -524,33 +543,28 @@ export class TrialScene extends Phaser.Scene {
   private addHazard(x: number, y: number, width: number, height: number, kind: string, segment?: GeneratedSegment, difficulty = 0) {
     const color = kind === "saw" ? 0xffa648 : 0xff3968;
     const shape = this.add.rectangle(x, y, width, height, color, 0.95).setStrokeStyle(2, 0xffd0db);
-    let smokePuffs: Phaser.GameObjects.Sprite[] | undefined;
+    let visual: Phaser.GameObjects.Sprite | undefined;
     if (kind === "spike") {
-      const surfaceY = y + height / 2;
-      const smokeSize = Math.min(width * 1.4, height * 1.5);
-      const puffScale = smokeSize / 32;
-      const puffs = [
-        { offsetX: -smokeSize * 0.2, frame: 8 },
-        { offsetX: 0, frame: 10 },
-        { offsetX: smokeSize * 0.2, frame: 12 },
-      ];
-      smokePuffs = puffs.map((puff) => this.add.sprite(x + puff.offsetX, surfaceY, "fx-dash-smoke", puff.frame)
-        .setOrigin(0.5, 1)
-        .setDisplaySize(smokeSize, smokeSize)
-        .setTint(0x9d63df)
+      const orbSize = Math.max(width, height) + 14;
+      const anchor = HAZARD_SMOKE_ORB_FRAME_ANCHORS[0];
+      const baseScale = orbSize / 512;
+      visual = this.add.sprite(x, y + height / 2, HAZARD_SMOKE_ORB_SHEET)
+        .setDisplaySize(orbSize, orbSize)
         .setDepth(1)
-        .setScale(puffScale * 0.18)
-        .setAlpha(0));
+        .setOrigin(anchor.x, anchor.y)
+        .setScale(baseScale * 0.22)
+        .setAlpha(0)
+        .play(HAZARD_SMOKE_ORB_ANIMATION);
       this.tweens.add({
-        targets: smokePuffs,
-        scaleX: { from: puffScale * 0.18, to: puffScale },
-        scaleY: { from: puffScale * 0.18, to: puffScale },
+        targets: visual,
+        scaleX: { from: baseScale * 0.22, to: baseScale },
+        scaleY: { from: baseScale * 0.22, to: baseScale },
         alpha: { from: 0, to: 0.95 },
         duration: 650,
-        hold: 800,
+        hold: 750,
         yoyo: true,
         repeat: -1,
-        repeatDelay: 1_300,
+        repeatDelay: 1_400,
         delay: 450,
         ease: "Sine.inOut",
       });
@@ -558,14 +572,14 @@ export class TrialScene extends Phaser.Scene {
     }
     const ring = kind === "saw" ? this.add.circle(x, y, Math.min(width, height) / 2 + 5, 0x39172a).setStrokeStyle(2, 0xff7853) : undefined;
     const hazard = {
-      shape, smokePuffs, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
+      shape, visual, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
       period: Math.max(260, 420 - difficulty * 18), amplitude: Math.min(75 + difficulty * 5, 110),
     };
     this.hazards.push(hazard);
     if (segment) {
       segment.hazards.push(hazard);
       segment.objects.push(shape);
-      if (smokePuffs) segment.objects.push(...smokePuffs);
+      if (visual) segment.objects.push(visual);
       if (ring) segment.objects.push(ring);
     }
   }
@@ -919,7 +933,14 @@ export class TrialScene extends Phaser.Scene {
     for (const hazard of this.hazards) {
       if (hazard.moving) hazard.shape.x = hazard.baseX + Math.sin(time / hazard.period + hazard.phase) * hazard.amplitude;
       if (hazard.ring) hazard.ring.x = hazard.shape.x;
-      const smokeActive = hazard.kind !== "spike" || (hazard.smokePuffs?.[0]?.alpha ?? 0) > 0.25;
+      if (hazard.visual) {
+        const frameIndex = hazard.visual.anims.currentFrame?.index ?? 0;
+        const anchor = HAZARD_SMOKE_ORB_FRAME_ANCHORS[frameIndex] ?? HAZARD_SMOKE_ORB_FRAME_ANCHORS[0];
+        hazard.visual
+          .setPosition(hazard.shape.x, hazard.shape.y + hazard.shape.height / 2)
+          .setOrigin(anchor.x, anchor.y);
+      }
+      const smokeActive = hazard.kind !== "spike" || (hazard.visual?.alpha ?? 0) > 0.25;
       if (smokeActive && time > this.invulnerableUntil && this.rectanglesOverlap(this.player, hazard.shape)) {
         this.die();
         return;
