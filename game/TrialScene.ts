@@ -56,6 +56,9 @@ const CHUNK_AHEAD = 2;
 const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
 const PLAYER_ART_SCALE = 0.22;
+const PLAYER_ART_HEIGHT = 510 * PLAYER_ART_SCALE;
+const PLAYER_ATTACK_FRAME_INTERVAL_MS = 60;
+const PLAYER_ATTACK_DURATION_MS = PLAYER_ATTACK_FRAME_INTERVAL_MS * 7;
 const PLAYER_BODY_WIDTH = 40;
 const PLAYER_BODY_HEIGHT = 66;
 const PLAYER_START_X = 75;
@@ -97,6 +100,16 @@ const PLAYER_TEXTURES = {
   landing: "player-landing",
   dash: "player-dash",
 } as const;
+const PLAYER_ATTACK_TEXTURES = [
+  "player-punch-01",
+  "player-punch-02",
+  "player-punch-03",
+  "player-punch-04",
+  "player-punch-05",
+  "player-punch-06",
+  "player-punch-07",
+] as const;
+const PLAYER_ATTACK_FRAME_HEIGHTS: readonly number[] = [556, 626, 542, 573, 621, 573, 1649];
 const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.idle]: 19 / 510,
   [PLAYER_TEXTURES.walkOne]: 22 / 495,
@@ -106,6 +119,13 @@ const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.jumpAir]: 19 / 450,
   [PLAYER_TEXTURES.landing]: 24 / 350,
   [PLAYER_TEXTURES.dash]: 33 / 375,
+  [PLAYER_ATTACK_TEXTURES[0]]: 19 / 556,
+  [PLAYER_ATTACK_TEXTURES[1]]: 6 / 626,
+  [PLAYER_ATTACK_TEXTURES[2]]: 10 / 542,
+  [PLAYER_ATTACK_TEXTURES[3]]: 10 / 573,
+  [PLAYER_ATTACK_TEXTURES[4]]: 8 / 621,
+  [PLAYER_ATTACK_TEXTURES[5]]: 8 / 573,
+  [PLAYER_ATTACK_TEXTURES[6]]: 80 / 1649,
 };
 const PLAYER_ART_GROUNDING_OVERLAP = 2;
 const MOTORCYCLE_TEXTURE = "green-motorcycle";
@@ -207,6 +227,7 @@ export class TrialScene extends Phaser.Scene {
   private respawning = false;
   private finished = false;
   private attackUntil = 0;
+  private attackStartedAt = 0;
   private wasAirborne = false;
   private landingUntil = 0;
   private viewWidth = VIEW_WIDTH;
@@ -245,6 +266,9 @@ export class TrialScene extends Phaser.Scene {
     this.load.image(PLAYER_TEXTURES.jumpAir, "/character/06_pulo_no_ar.png");
     this.load.image(PLAYER_TEXTURES.landing, "/character/07_aterrissagem.png");
     this.load.image(PLAYER_TEXTURES.dash, "/character/08_dash_ataque.png");
+    PLAYER_ATTACK_TEXTURES.forEach((key, index) => {
+      this.load.image(key, `/character/attacks/punch-${String(index + 1).padStart(2, "0")}.png`);
+    });
     for (const kind of ENEMY_KINDS) {
       const root = `/monsters/${kind}`;
       for (const action of ["idle", "move", "attack", "hit", "death"] as const) {
@@ -784,8 +808,14 @@ export class TrialScene extends Phaser.Scene {
     } else if (ridingMotorcycle) {
       this.motorcycleWasMoving = false;
       texture = MOTORCYCLE_RIDING_TEXTURE;
-    } else if (time < this.dashUntil || time < this.attackUntil) texture = PLAYER_TEXTURES.dash;
-    else if (grounded && crouching) texture = PLAYER_TEXTURES.crouch;
+    } else if (time < this.dashUntil) texture = PLAYER_TEXTURES.dash;
+    else if (time < this.attackUntil) {
+      const frameIndex = Math.min(
+        PLAYER_ATTACK_TEXTURES.length - 1,
+        Math.floor((time - this.attackStartedAt) / PLAYER_ATTACK_FRAME_INTERVAL_MS),
+      );
+      texture = PLAYER_ATTACK_TEXTURES[frameIndex];
+    } else if (grounded && crouching) texture = PLAYER_TEXTURES.crouch;
     else if (grounded && time < this.landingUntil) texture = PLAYER_TEXTURES.landing;
     else if (!grounded) texture = this.body.velocity.y < 0 ? PLAYER_TEXTURES.jumpRise : PLAYER_TEXTURES.jumpAir;
     else if (direction) texture = Math.floor(time / 150) % 2 === 0 ? PLAYER_TEXTURES.walkOne : PLAYER_TEXTURES.walkTwo;
@@ -794,7 +824,11 @@ export class TrialScene extends Phaser.Scene {
       this.playerArt.setTexture(texture);
       if (motorcycleAnimationFrame) this.playerArt.setScale(MOTORCYCLE_RIDE_FRAME_SCALE);
       else if (ridingMotorcycle) this.playerArt.setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height);
-      else this.playerArt.setScale(PLAYER_ART_SCALE);
+      else {
+        const attackFrameIndex = PLAYER_ATTACK_TEXTURES.indexOf(texture as typeof PLAYER_ATTACK_TEXTURES[number]);
+        const attackFrameHeight = PLAYER_ATTACK_FRAME_HEIGHTS[attackFrameIndex];
+        this.playerArt.setScale(attackFrameHeight ? PLAYER_ART_HEIGHT / attackFrameHeight : PLAYER_ART_SCALE);
+      }
     }
     this.positionPlayerArt();
     this.playerArt.setFlipX(this.facing < 0);
@@ -945,7 +979,8 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private startAttack(time: number) {
-    this.attackUntil = time + 180;
+    this.attackStartedAt = time;
+    this.attackUntil = time + PLAYER_ATTACK_DURATION_MS;
     this.audio.play("attack");
     for (const enemy of this.enemies) {
       if (!enemy.sprite.active || enemy.state === "dying") continue;
