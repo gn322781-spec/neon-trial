@@ -103,12 +103,8 @@ const PLAYER_ATTACK_TEXTURES = [
   "player-punch-01",
   "player-punch-02",
   "player-punch-03",
-  "player-punch-04",
-  "player-punch-05",
-  "player-punch-06",
-  "player-punch-07",
 ] as const;
-const PLAYER_ATTACK_FRAME_HEIGHTS: readonly number[] = [556, 626, 542, 573, 621, 573, 1649];
+const PLAYER_ATTACK_FRAME_HEIGHTS: readonly number[] = [542, 621, 1649];
 const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.idle]: 19 / 510,
   [PLAYER_TEXTURES.walkOne]: 22 / 495,
@@ -118,13 +114,9 @@ const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.jumpAir]: 19 / 450,
   [PLAYER_TEXTURES.landing]: 24 / 350,
   [PLAYER_TEXTURES.dash]: 33 / 375,
-  [PLAYER_ATTACK_TEXTURES[0]]: 19 / 556,
-  [PLAYER_ATTACK_TEXTURES[1]]: 6 / 626,
-  [PLAYER_ATTACK_TEXTURES[2]]: 10 / 542,
-  [PLAYER_ATTACK_TEXTURES[3]]: 10 / 573,
-  [PLAYER_ATTACK_TEXTURES[4]]: 8 / 621,
-  [PLAYER_ATTACK_TEXTURES[5]]: 8 / 573,
-  [PLAYER_ATTACK_TEXTURES[6]]: 80 / 1649,
+  [PLAYER_ATTACK_TEXTURES[0]]: 10 / 542,
+  [PLAYER_ATTACK_TEXTURES[1]]: 8 / 621,
+  [PLAYER_ATTACK_TEXTURES[2]]: 80 / 1649,
 };
 const PLAYER_ART_GROUNDING_OVERLAP = 2;
 const MOTORCYCLE_TEXTURE = "green-motorcycle";
