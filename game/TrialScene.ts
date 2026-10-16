@@ -70,6 +70,17 @@ const PLAYER_TEXTURES = {
   landing: "player-landing",
   dash: "player-dash",
 } as const;
+const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
+  [PLAYER_TEXTURES.idle]: 19 / 510,
+  [PLAYER_TEXTURES.walkOne]: 22 / 495,
+  [PLAYER_TEXTURES.walkTwo]: 19 / 480,
+  [PLAYER_TEXTURES.crouch]: 20 / 430,
+  [PLAYER_TEXTURES.jumpRise]: 35 / 425,
+  [PLAYER_TEXTURES.jumpAir]: 19 / 450,
+  [PLAYER_TEXTURES.landing]: 24 / 350,
+  [PLAYER_TEXTURES.dash]: 33 / 375,
+};
+const PLAYER_ART_GROUNDING_OVERLAP = 2;
 
 function createSegmentRandom(index: number) {
   let state = Math.imul(index + 1, 0x9e3779b1) >>> 0;
@@ -196,6 +207,7 @@ export class TrialScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.crystals, (_player, crystal) => this.collect(crystal as Phaser.GameObjects.Image), undefined, this);
     this.playerArt = this.add.image(PLAYER_START_X, GROUND_TOP, PLAYER_TEXTURES.idle)
       .setOrigin(0.5, 1).setScale(PLAYER_ART_SCALE).setDepth(2);
+    this.positionPlayerArt();
     this.cameras.main.startFollow(this.player, true, 0.1, 0.08, -250, 0);
     this.cameras.main.setDeadzone(300, 130);
 
@@ -475,8 +487,18 @@ export class TrialScene extends Phaser.Scene {
     else if (direction) texture = Math.floor(time / 150) % 2 === 0 ? PLAYER_TEXTURES.walkOne : PLAYER_TEXTURES.walkTwo;
 
     if (this.playerArt.texture.key !== texture) this.playerArt.setTexture(texture);
-    this.playerArt.setPosition(this.player.x, this.player.y + PLAYER_ART_FOOT_OFFSET).setFlipX(this.facing < 0);
+    this.positionPlayerArt();
+    this.playerArt.setFlipX(this.facing < 0);
     this.playerArt.setAlpha(this.respawning ? 0.55 : 1);
+  }
+
+  private positionPlayerArt() {
+    const bottomMargin = PLAYER_TEXTURE_BOTTOM_MARGIN[this.playerArt.texture.key] ?? 0;
+    const visibleFootOffset = this.playerArt.displayHeight * bottomMargin;
+    this.playerArt.setPosition(
+      this.player.x,
+      this.player.y + PLAYER_ART_FOOT_OFFSET + visibleFootOffset + PLAYER_ART_GROUNDING_OVERLAP,
+    );
   }
 
   private updateHazards(time: number) {
@@ -583,7 +605,9 @@ export class TrialScene extends Phaser.Scene {
       this.player.setPosition(this.checkpointX, PLAYER_START_Y).setAlpha(1);
       this.body.setVelocity(0, 0);
       this.body.setAllowGravity(true);
-      this.playerArt.setPosition(this.player.x, this.player.y + PLAYER_ART_FOOT_OFFSET).setTexture(PLAYER_TEXTURES.idle).setAlpha(1);
+      this.playerArt.setTexture(PLAYER_TEXTURES.idle);
+      this.positionPlayerArt();
+      this.playerArt.setAlpha(1);
       this.invulnerableUntil = this.time.now + 1_050;
       this.nextDashAt = this.time.now;
       this.respawning = false;
