@@ -63,13 +63,14 @@ const PLAYER_START_Y = GROUND_TOP - PLAYER_BODY_HEIGHT / 2;
 const PLAYER_ART_FOOT_OFFSET = PLAYER_BODY_HEIGHT / 2;
 const PICKUP_TEXTURE = "cigarette-pack";
 const BACKGROUND_LAYERS = [
-  { key: "space-sky", path: "/space/sky.webp", parallax: 0.01, depth: -30, alpha: 1 },
-  { key: "space-clouds", path: "/space/clouds.webp", parallax: 0.045, depth: -28, alpha: 0.82 },
-  { key: "space-far-rocks-3", path: "/space/far-rocks-3.webp", parallax: 0.09, depth: -26, alpha: 0.92 },
-  { key: "space-far-rocks-2", path: "/space/far-rocks-2.webp", parallax: 0.15, depth: -24, alpha: 0.96 },
-  { key: "space-far-rocks-1", path: "/space/far-rocks-1.webp", parallax: 0.23, depth: -22, alpha: 1 },
-  { key: "space-floating-rocks", path: "/space/floating-rocks.webp", parallax: 0.31, depth: -20, alpha: 0.9 },
-  { key: "space-particles", path: "/space/particles.webp", parallax: 0.08, depth: -18, alpha: 0.82 },
+  { key: "cave-color", path: "/cave/7.png", parallax: 0.005, depth: -32, alpha: 1 },
+  { key: "cave-backdrop", path: "/cave/0.png", parallax: 0.012, depth: -30, alpha: 1 },
+  { key: "cave-edges", path: "/cave/1.png", parallax: 0.045, depth: -28, alpha: 0.9 },
+  { key: "cave-columns", path: "/cave/3.png", parallax: 0.09, depth: -26, alpha: 0.72 },
+  { key: "cave-overhangs", path: "/cave/5.png", parallax: 0.15, depth: -24, alpha: 0.74 },
+  { key: "cave-pillars", path: "/cave/4.png", parallax: 0.21, depth: -22, alpha: 0.72 },
+  { key: "cave-rubble", path: "/cave/2.png", parallax: 0.28, depth: -20, alpha: 0.88 },
+  { key: "cave-foreground", path: "/cave/6.png", parallax: 0.34, depth: -18, alpha: 0.78 },
 ] as const;
 const ISLAND_PLATFORMS = [
   { key: "space-island-1", surface: 0.46 },
@@ -311,7 +312,7 @@ export class TrialScene extends Phaser.Scene {
     for (const layer of BACKGROUND_LAYERS) {
       const sprite = this.add.tileSprite(this.viewWidth / 2, VIEW_HEIGHT / 2, this.viewWidth, VIEW_HEIGHT, layer.key)
         .setOrigin(0.5)
-        .setTileScale(1.35)
+        .setTileScale(Math.max(this.viewWidth / 384, VIEW_HEIGHT / 216))
         .setScrollFactor(0)
         .setAlpha(layer.alpha)
         .setDepth(layer.depth);
