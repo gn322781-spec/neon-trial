@@ -10,7 +10,7 @@ export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: n
 export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameVersion: string; events: AttemptEvent[]; zonesCompleted: number };
 
 type MobileSnapshot = ReturnType<Controls["snapshot"]>;
-type DamageHazard = { shape: Phaser.GameObjects.Rectangle; visual?: Phaser.GameObjects.Sprite; smokeCircles?: Phaser.GameObjects.Arc[]; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
+type DamageHazard = { shape: Phaser.GameObjects.Rectangle; smokePuffs?: Phaser.GameObjects.Sprite[]; ring?: Phaser.GameObjects.Arc; baseX: number; moving: boolean; phase: number; kind: string; period: number; amplitude: number };
 type EnemyState = "patrol" | "approach" | "attack" | "hit" | "dying";
 type EnemyUnit = {
   id: string;
@@ -122,8 +122,6 @@ const PLAYER_ART_GROUNDING_OVERLAP = 2;
 const MOTORCYCLE_TEXTURE = "green-motorcycle";
 const MOTORCYCLE_MOUNT_TEXTURE = "motorcycle-mount";
 const MOTORCYCLE_RIDING_TEXTURE = "motorcycle-riding";
-const HAZARD_SMOKE_WALL_SHEET = "hazard-smoke-wall-sheet";
-const HAZARD_SMOKE_WALL_ANIMATION = "hazard-smoke-wall";
 const GAME_EFFECTS = [
   { key: "fx-attack-impact", path: "/effects/gigapack/directional_impact_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 7 },
   { key: "fx-player-impact", path: "/effects/gigapack/symmetrical_impact_001_small_yellow.png", frameWidth: 48, frameHeight: 48, frameCount: 7 },
@@ -235,7 +233,6 @@ export class TrialScene extends Phaser.Scene {
 
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
-    this.load.spritesheet(HAZARD_SMOKE_WALL_SHEET, "/obstacles/purple-smoke-wall-sheet.png", { frameWidth: 384, frameHeight: 1024 });
     for (const effect of GAME_EFFECTS) {
       this.load.spritesheet(effect.key, effect.path, { frameWidth: effect.frameWidth, frameHeight: effect.frameHeight });
     }
@@ -324,8 +321,8 @@ export class TrialScene extends Phaser.Scene {
             })
             .sort((left, right) => left.gap - right.gap || left.distanceFromHazard - right.distanceFromHazard)[0];
           if (platform?.gap === 0) {
-            const smokeRadius = Math.min(hazard.height * 0.42, hazard.width * 0.26);
-            const smokeHalfWidth = smokeRadius * 1.8;
+            const smokeSize = Math.min(hazard.width * 1.4, hazard.height * 1.5);
+            const smokeHalfWidth = smokeSize * 0.68;
             const minX = platform.left + smokeHalfWidth;
             const maxX = platform.right - smokeHalfWidth;
             x = minX <= maxX ? Phaser.Math.Clamp(hazard.x, minX, maxX) : (platform.left + platform.right) / 2;
@@ -404,18 +401,6 @@ export class TrialScene extends Phaser.Scene {
         frames: this.anims.generateFrameNumbers(effect.key, { start: 0, end: effect.frameCount - 1 }),
         frameRate: 15,
         repeat: 0,
-      });
-    }
-    const loopingHazards = [
-      { key: HAZARD_SMOKE_WALL_ANIMATION, sheet: HAZARD_SMOKE_WALL_SHEET, frameCount: 4 },
-    ] as const;
-    for (const effect of loopingHazards) {
-      if (this.anims.exists(effect.key)) continue;
-      this.anims.create({
-        key: effect.key,
-        frames: this.anims.generateFrameNumbers(effect.sheet, { start: 0, end: effect.frameCount - 1 }),
-        frameRate: 8,
-        repeat: -1,
       });
     }
   }
@@ -537,55 +522,50 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private addHazard(x: number, y: number, width: number, height: number, kind: string, segment?: GeneratedSegment, difficulty = 0) {
-    const color = kind === "laser" ? 0xff326f : kind === "saw" ? 0xffa648 : 0xff3968;
-    const shape = this.add.rectangle(x, y, width, height, color, kind === "laser" ? 0.72 : 0.95)
-      .setStrokeStyle(2, kind === "laser" ? 0xffa2c0 : 0xffd0db);
-    let visual: Phaser.GameObjects.Sprite | undefined;
-    let smokeCircles: Phaser.GameObjects.Arc[] | undefined;
+    const color = kind === "saw" ? 0xffa648 : 0xff3968;
+    const shape = this.add.rectangle(x, y, width, height, color, 0.95).setStrokeStyle(2, 0xffd0db);
+    let smokePuffs: Phaser.GameObjects.Sprite[] | undefined;
     if (kind === "spike") {
       const surfaceY = y + height / 2;
-      const radius = Math.min(height * 0.42, width * 0.26);
+      const smokeSize = Math.min(width * 1.4, height * 1.5);
+      const puffScale = smokeSize / 32;
       const puffs = [
-        { offsetX: -radius * 0.8, radius: radius * 0.88, fill: 0x713dbb, edge: 0xb577ff },
-        { offsetX: 0, radius, fill: 0x8b48d4, edge: 0xd2a1ff },
-        { offsetX: radius * 0.8, radius: radius * 0.88, fill: 0x6735ad, edge: 0xa96af0 },
+        { offsetX: -smokeSize * 0.2, frame: 8 },
+        { offsetX: 0, frame: 10 },
+        { offsetX: smokeSize * 0.2, frame: 12 },
       ];
-      smokeCircles = puffs.map((puff) => this.add.circle(x + puff.offsetX, surfaceY, puff.radius, puff.fill, 0.82)
+      smokePuffs = puffs.map((puff) => this.add.sprite(x + puff.offsetX, surfaceY, "fx-dash-smoke", puff.frame)
         .setOrigin(0.5, 1)
-        .setStrokeStyle(2, puff.edge, 0.8)
+        .setDisplaySize(smokeSize, smokeSize)
+        .setTint(0x9d63df)
         .setDepth(1)
-        .setScale(0.12)
+        .setScale(puffScale * 0.18)
         .setAlpha(0));
       this.tweens.add({
-        targets: smokeCircles,
-        scaleX: { from: 0.12, to: 1 },
-        scaleY: { from: 0.12, to: 1 },
-        alpha: { from: 0, to: 0.86 },
-        duration: 900,
+        targets: smokePuffs,
+        scaleX: { from: puffScale * 0.18, to: puffScale },
+        scaleY: { from: puffScale * 0.18, to: puffScale },
+        alpha: { from: 0, to: 0.95 },
+        duration: 650,
+        hold: 800,
         yoyo: true,
         repeat: -1,
+        repeatDelay: 1_300,
+        delay: 450,
         ease: "Sine.inOut",
       });
-      shape.setVisible(false);
-    } else if (kind === "laser") {
-      const wallHeight = height + 10;
-      visual = this.add.sprite(x, y, HAZARD_SMOKE_WALL_SHEET)
-        .setDisplaySize(wallHeight * 384 / 1024, wallHeight)
-        .setDepth(1)
-        .play(HAZARD_SMOKE_WALL_ANIMATION);
       shape.setVisible(false);
     }
     const ring = kind === "saw" ? this.add.circle(x, y, Math.min(width, height) / 2 + 5, 0x39172a).setStrokeStyle(2, 0xff7853) : undefined;
     const hazard = {
-      shape, visual, smokeCircles, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
+      shape, smokePuffs, ring, baseX: x, moving: kind === "saw", phase: x / 155, kind,
       period: Math.max(260, 420 - difficulty * 18), amplitude: Math.min(75 + difficulty * 5, 110),
     };
     this.hazards.push(hazard);
     if (segment) {
       segment.hazards.push(hazard);
       segment.objects.push(shape);
-      if (visual) segment.objects.push(visual);
-      if (smokeCircles) segment.objects.push(...smokeCircles);
+      if (smokePuffs) segment.objects.push(...smokePuffs);
       if (ring) segment.objects.push(ring);
     }
   }
@@ -692,7 +672,7 @@ export class TrialScene extends Phaser.Scene {
     }
 
     const hazardCount = Math.min(3 + Math.floor(index / 2), 6);
-    let smokeOrbPlaced = false;
+    let smokePuffPlaced = false;
     for (let obstacle = 0; obstacle < hazardCount; obstacle += 1) {
       const platformIndex = obstacle % platforms.length;
       if (platformIndex === motorcyclePlatformPart) continue;
@@ -701,11 +681,11 @@ export class TrialScene extends Phaser.Scene {
       const side = slot % 2 === 0 ? firstSlotSide : -firstSlotSide;
       const platform = platforms[platformIndex];
       const x = platform.center + side * platform.width * 0.28;
-      const scheduledKind = difficulty >= 5 && obstacle % 3 === 2 ? "laser" : difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
-      const kind = smokeOrbPlaced ? scheduledKind : "spike";
-      if (kind === "spike") smokeOrbPlaced = true;
+      const scheduledKind = difficulty >= 2 && obstacle % 2 === 1 ? "saw" : "spike";
+      const kind = smokePuffPlaced ? scheduledKind : "spike";
+      if (kind === "spike") smokePuffPlaced = true;
       const surfaceY = platform.surfaceY;
-      this.addHazard(x, surfaceY - (kind === "laser" ? 55 : 15), kind === "laser" ? 14 : 42 + Math.min(difficulty * 2, 20), kind === "laser" ? 110 : 30, kind, segment, difficulty);
+      this.addHazard(x, surfaceY - 15, 42 + Math.min(difficulty * 2, 20), 30, kind, segment, difficulty);
     }
 
     const availableEnemyPlatforms = platforms.filter((_platform, part) => part !== motorcyclePlatformPart);
@@ -938,16 +918,9 @@ export class TrialScene extends Phaser.Scene {
   private updateHazards(time: number) {
     for (const hazard of this.hazards) {
       if (hazard.moving) hazard.shape.x = hazard.baseX + Math.sin(time / hazard.period + hazard.phase) * hazard.amplitude;
-      if (hazard.visual) hazard.visual.x = hazard.shape.x;
-      if (hazard.kind === "laser") {
-        const active = Math.floor((time + hazard.phase * 200) / 1_000) % 2 === 0;
-        hazard.shape.setAlpha(active ? 0.82 : 0.12);
-        hazard.shape.setData("active", active);
-        hazard.visual?.setAlpha(active ? 1 : 0.2);
-      }
       if (hazard.ring) hazard.ring.x = hazard.shape.x;
-      const smokeActive = hazard.kind !== "spike" || (hazard.smokeCircles?.[0]?.alpha ?? 0) > 0.25;
-      if (smokeActive && time > this.invulnerableUntil && this.rectanglesOverlap(this.player, hazard.shape) && (hazard.kind !== "laser" || hazard.shape.getData("active"))) {
+      const smokeActive = hazard.kind !== "spike" || (hazard.smokePuffs?.[0]?.alpha ?? 0) > 0.25;
+      if (smokeActive && time > this.invulnerableUntil && this.rectanglesOverlap(this.player, hazard.shape)) {
         this.die();
         return;
       }
