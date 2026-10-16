@@ -126,6 +126,17 @@ const HAZARD_SMOKE_ORB_SHEET = "hazard-smoke-orb-sheet";
 const HAZARD_SMOKE_WALL_SHEET = "hazard-smoke-wall-sheet";
 const HAZARD_SMOKE_ORB_ANIMATION = "hazard-smoke-orb";
 const HAZARD_SMOKE_WALL_ANIMATION = "hazard-smoke-wall";
+// Visible-pixel bounds in each 512x512 orb frame. Anchor every animation frame
+// at its visible center and bottom so transparent sheet padding cannot make it
+// appear to float above or sink into an island.
+const HAZARD_SMOKE_ORB_FRAME_ANCHORS = [
+  { x: 271.5 / 512, y: 458 / 512 },
+  { x: 259 / 512, y: 457 / 512 },
+  { x: 247.5 / 512, y: 457 / 512 },
+  { x: 270.5 / 512, y: 435 / 512 },
+  { x: 261.5 / 512, y: 435 / 512 },
+  { x: 251.5 / 512, y: 439 / 512 },
+] as const;
 const GAME_EFFECTS = [
   { key: "fx-attack-impact", path: "/effects/gigapack/directional_impact_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 7 },
   { key: "fx-player-impact", path: "/effects/gigapack/symmetrical_impact_001_small_yellow.png", frameWidth: 48, frameHeight: 48, frameCount: 7 },
@@ -546,10 +557,12 @@ export class TrialScene extends Phaser.Scene {
     let visual: Phaser.GameObjects.Sprite | undefined;
     if (kind === "spike") {
       const orbSize = Math.max(width, height) + 14;
-      visual = this.add.sprite(x, y + height / 2 - orbSize / 2, HAZARD_SMOKE_ORB_SHEET)
+      const anchor = HAZARD_SMOKE_ORB_FRAME_ANCHORS[0];
+      visual = this.add.sprite(x, y + height / 2, HAZARD_SMOKE_ORB_SHEET)
         .setDisplaySize(orbSize, orbSize)
         .setDepth(1)
         .play(HAZARD_SMOKE_ORB_ANIMATION);
+      visual.setOrigin(anchor.x, anchor.y);
       shape.setVisible(false);
     } else if (kind === "laser") {
       const wallHeight = height + 10;
@@ -921,7 +934,17 @@ export class TrialScene extends Phaser.Scene {
   private updateHazards(time: number) {
     for (const hazard of this.hazards) {
       if (hazard.moving) hazard.shape.x = hazard.baseX + Math.sin(time / hazard.period + hazard.phase) * hazard.amplitude;
-      if (hazard.visual) hazard.visual.x = hazard.shape.x;
+      if (hazard.visual) {
+        if (hazard.kind === "spike") {
+          const frameIndex = hazard.visual.anims.currentFrame?.index ?? 0;
+          const anchor = HAZARD_SMOKE_ORB_FRAME_ANCHORS[frameIndex] ?? HAZARD_SMOKE_ORB_FRAME_ANCHORS[0];
+          hazard.visual
+            .setPosition(hazard.shape.x, hazard.shape.y + hazard.shape.height / 2)
+            .setOrigin(anchor.x, anchor.y);
+        } else {
+          hazard.visual.x = hazard.shape.x;
+        }
+      }
       if (hazard.kind === "laser") {
         const active = Math.floor((time + hazard.phase * 200) / 1_000) % 2 === 0;
         hazard.shape.setAlpha(active ? 0.82 : 0.12);
@@ -1163,4 +1186,5 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
+
 
