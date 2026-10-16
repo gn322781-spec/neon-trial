@@ -3,6 +3,14 @@
   <!-- Generator: Adobe Illustrator 30.7.0, SVG Export Plug-In . SVG Version: 2.1.4 Build 114)  -->
   <defs>
     <style>
+      @font-face {
+        font-family: "Palitoon-Regular";
+        src: url("/fonts/palitoon.otf") format("opentype");
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+      }
+
       .st0 {
         fill: #c9c9c9;
       }
