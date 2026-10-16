@@ -35,7 +35,7 @@ type GeneratedSegment = {
   end: number;
   renderEnd: number;
   checkpointX: number;
-  checkpoint?: Phaser.GameObjects.Triangle;
+  checkpoint?: Phaser.GameObjects.Sprite;
   platforms: Phaser.GameObjects.Rectangle[];
   pickups: Phaser.GameObjects.Image[];
   motorcyclePickups: Phaser.GameObjects.Image[];
@@ -125,6 +125,10 @@ const MOTORCYCLE_MOUNT_TEXTURE = "motorcycle-mount";
 const MOTORCYCLE_RIDING_TEXTURE = "motorcycle-riding";
 const HAZARD_SMOKE_ORB_SHEET = "hazard-smoke-orb-sheet";
 const HAZARD_SMOKE_ORB_ANIMATION = "hazard-smoke-orb";
+const CHECKPOINT_ALTAR_TEXTURE = "checkpoint-altar";
+const CHECKPOINT_ALTAR_ANIMATION = "checkpoint-altar-idle";
+const CHECKPOINT_ALTAR_FRAME_SIZE = { frameWidth: 654, frameHeight: 600 };
+const CHECKPOINT_ALTAR_DISPLAY_SIZE = { width: 132, height: 121 };
 // Visible center and bottom of the six smoke orb frames in the 512px cells.
 const HAZARD_SMOKE_ORB_FRAME_ANCHORS = [
   { x: 271.5 / 512, y: 458 / 512 },
@@ -140,6 +144,7 @@ const GAME_EFFECTS = [
   { key: "fx-dash-smoke", path: "/effects/gigapack/directional_smoke_burst_001_small_white.png", frameWidth: 32, frameHeight: 32, frameCount: 21 },
   { key: "fx-collect-sparkle", path: "/effects/gigapack/round_sparkle_burst_001_small_blue.png", frameWidth: 32, frameHeight: 32, frameCount: 14 },
   { key: "fx-enemy-explosion", path: "/effects/gigapack/symmetrical_explosion_001_small_orange.png", frameWidth: 32, frameHeight: 32, frameCount: 8 },
+  { key: "fx-checkpoint-glow", path: "/checkpoints/cyan-sparkle-sheet.png", frameWidth: 768, frameHeight: 512, frameCount: 4 },
 ] as const;
 const MOTORCYCLE_RIDE_FRAME_TEXTURES = [
   "motorcycle-ride-frame-01",
@@ -200,7 +205,7 @@ export class TrialScene extends Phaser.Scene {
   private readonly generatedSegments: GeneratedSegment[] = [];
   private readonly enemies: EnemyUnit[] = [];
   private readonly enemyProjectiles: EnemyProjectile[] = [];
-  private readonly checkpointFlags: Phaser.GameObjects.Triangle[] = [];
+  private readonly checkpointAltars: Phaser.GameObjects.Sprite[] = [];
   private readonly score: ScoreState = createScoreState();
   private readonly scoreEvents: AttemptEvent[] = [];
   private readonly backgroundLayers: BackgroundLayer[] = [];
@@ -244,6 +249,7 @@ export class TrialScene extends Phaser.Scene {
   preload() {
     for (const layer of BACKGROUND_LAYERS) this.load.image(layer.key, layer.path);
     this.load.spritesheet(HAZARD_SMOKE_ORB_SHEET, "/obstacles/smoke-orb-sheet.png", { frameWidth: 512, frameHeight: 512 });
+    this.load.spritesheet(CHECKPOINT_ALTAR_TEXTURE, "/checkpoints/altar-sheet.png", CHECKPOINT_ALTAR_FRAME_SIZE);
     for (const effect of GAME_EFFECTS) {
       this.load.spritesheet(effect.key, effect.path, { frameWidth: effect.frameWidth, frameHeight: effect.frameHeight });
     }
@@ -355,7 +361,15 @@ export class TrialScene extends Phaser.Scene {
         .setScrollFactor(1).setDepth(1);
       this.add.rectangle(zone.start, 270, 2, 390, 0x37657c, 0.5);
       this.add.rectangle(zone.end, 270, 2, 390, 0x37657c, 0.5);
-      this.addCheckpoint(zone.checkpoint);
+      const checkpointPlatform = zone.platforms
+        .map((platform) => ({
+          left: platform.x - platform.width / 2,
+          right: platform.x + platform.width / 2,
+          surfaceY: platform.y - (platform.height ?? 60) / 2,
+        }))
+        .filter((platform) => zone.checkpoint >= platform.left && zone.checkpoint <= platform.right)
+        .sort((left, right) => left.surfaceY - right.surfaceY)[0];
+      this.addCheckpoint(zone.checkpoint, checkpointPlatform?.surfaceY ?? GROUND_TOP);
     }
 
     this.add.text(4_040, 260, "ENDLESS / KEEP RUNNING", { fontFamily: "monospace", fontSize: "18px", color: "#c6b2ff" });
@@ -400,6 +414,14 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private createEffectAnimations() {
+    if (!this.anims.exists(CHECKPOINT_ALTAR_ANIMATION)) {
+      this.anims.create({
+        key: CHECKPOINT_ALTAR_ANIMATION,
+        frames: this.anims.generateFrameNumbers(CHECKPOINT_ALTAR_TEXTURE, { start: 0, end: 3 }),
+        frameRate: 5,
+        repeat: -1,
+      });
+    }
     for (const effect of GAME_EFFECTS) {
       if (this.anims.exists(effect.key)) continue;
       this.anims.create({
@@ -572,12 +594,15 @@ export class TrialScene extends Phaser.Scene {
     }
   }
 
-  private addCheckpoint(x: number, objects?: Phaser.GameObjects.GameObject[]) {
-    const post = this.add.rectangle(x, 425, 8, 100, 0x243448).setStrokeStyle(2, 0x8c69ff, 0.8);
-    const flag = this.add.triangle(x + 13, 385, 0, 0, 25, 12, 0, 24, 0x725cff).setOrigin(0, 0.5);
-    this.checkpointFlags.push(flag);
-    objects?.push(post, flag);
-    return flag;
+  private addCheckpoint(x: number, surfaceY: number, objects?: Phaser.GameObjects.GameObject[]) {
+    const altar = this.add.sprite(x, surfaceY, CHECKPOINT_ALTAR_TEXTURE)
+      .setDisplaySize(CHECKPOINT_ALTAR_DISPLAY_SIZE.width, CHECKPOINT_ALTAR_DISPLAY_SIZE.height)
+      .setOrigin(0.5, 0.88)
+      .setDepth(2)
+      .play(CHECKPOINT_ALTAR_ANIMATION);
+    this.checkpointAltars.push(altar);
+    objects?.push(altar);
+    return altar;
   }
 
   private ensureWorldAhead() {
@@ -605,8 +630,8 @@ export class TrialScene extends Phaser.Scene {
         if (segment.platforms.includes(object as Phaser.GameObjects.Rectangle)) continue;
         if (object.scene) object.destroy();
       }
-      const flagIndex = segment.checkpoint ? this.checkpointFlags.indexOf(segment.checkpoint) : -1;
-      if (flagIndex >= 0) this.checkpointFlags.splice(flagIndex, 1);
+      const altarIndex = segment.checkpoint ? this.checkpointAltars.indexOf(segment.checkpoint) : -1;
+      if (altarIndex >= 0) this.checkpointAltars.splice(altarIndex, 1);
       this.generatedSegments.splice(index, 1);
     }
   }
@@ -706,7 +731,7 @@ export class TrialScene extends Phaser.Scene {
       }, segment);
     }
 
-    segment.checkpoint = this.addCheckpoint(segment.checkpointX, segment.objects);
+    segment.checkpoint = this.addCheckpoint(segment.checkpointX, platforms[0].surfaceY, segment.objects);
     this.generatedSegments.push(segment);
     this.worldEndX = end + CHUNK_AHEAD * this.viewWidth;
     this.physics.world.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT + 1_200);
@@ -1085,7 +1110,7 @@ export class TrialScene extends Phaser.Scene {
       if (this.player.x >= boundary && this.award("zone", `zone:${index}`)) this.emitHud();
       if (this.player.x >= ZONES[index].checkpoint && this.checkpointX < ZONES[index].checkpoint) {
         this.checkpointX = ZONES[index].checkpoint;
-        this.checkpointFlags[index]?.setFillStyle(0x43e7f5);
+        this.activateCheckpoint(this.checkpointAltars[index]);
         this.audio.play("checkpoint");
         this.emitHud();
       }
@@ -1093,11 +1118,24 @@ export class TrialScene extends Phaser.Scene {
     while (this.player.x >= this.nextEndlessCheckpointX) {
       this.checkpointX = this.nextEndlessCheckpointX;
       const segment = this.generatedSegments.find((item) => item.checkpointX === this.checkpointX);
-      segment?.checkpoint?.setFillStyle(0x43e7f5);
+      this.activateCheckpoint(segment?.checkpoint);
       this.nextEndlessCheckpointX += SEGMENT_LENGTH;
       this.audio.play("checkpoint");
       this.emitHud();
     }
+  }
+
+  private activateCheckpoint(altar?: Phaser.GameObjects.Sprite) {
+    if (!altar?.active) return;
+    this.playEffect("fx-checkpoint-glow", altar.x, altar.y - CHECKPOINT_ALTAR_DISPLAY_SIZE.height * 0.38, 168, 112);
+    this.tweens.add({
+      targets: altar,
+      alpha: { from: 1, to: 0.55 },
+      duration: 120,
+      yoyo: true,
+      repeat: 1,
+      ease: "Sine.inOut",
+    });
   }
 
   private die() {
