@@ -38,8 +38,13 @@ function updateRankingArtwork(document: Document | null, rows: RankRow[]) {
     }
   };
 
-  RANKING_NAME_LAYERS.forEach((layerId, index) => writeText(layerId, rows[index]?.nickname ?? "", 470));
-  RANKING_SCORE_LAYERS.forEach((layerId, index) => writeText(layerId, rows[index]?.best_score.toLocaleString("pt-BR") ?? ""));
+  const writeRows = () => {
+    RANKING_NAME_LAYERS.forEach((layerId, index) => writeText(layerId, rows[index]?.nickname ?? "", 470));
+    RANKING_SCORE_LAYERS.forEach((layerId, index) => writeText(layerId, rows[index]?.best_score.toLocaleString("pt-BR") ?? ""));
+  };
+
+  writeRows();
+  void document.fonts?.ready.then(writeRows);
 }
 
 function validNickname(value: string) {
