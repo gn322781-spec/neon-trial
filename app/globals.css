@@ -134,6 +134,35 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 .touch-button.icon-control:active .touch-icon img:first-child { opacity: 0; }
 .touch-button.icon-control:active .touch-icon img + img { opacity: 1; }
 
+/* Compact PlayStation-style action cluster. */
+.touch-actions {
+  --action-size: clamp(52px, 5vw, 64px);
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: calc(var(--action-size) * 2 + 8px);
+  height: calc(var(--action-size) * 2.7);
+  pointer-events: none;
+}
+.touch-actions .touch-button {
+  position: absolute;
+  width: var(--action-size);
+  height: var(--action-size);
+  opacity: .7;
+  pointer-events: auto;
+}
+.touch-actions .touch-button.jump { right: 0; bottom: 0; }
+.touch-actions .touch-button.attack { top: calc(var(--action-size) * .85); left: 0; }
+.touch-actions .touch-button.dash { top: 0; right: 0; }
+.touch-actions .touch-button:active,
+.touch-actions .touch-button:focus-visible { opacity: 1; }
+@media (max-height: 360px) and (orientation: landscape) {
+  .touch-actions { --action-size: 48px; }
+}
+@media (max-height: 280px) and (orientation: landscape) {
+  .touch-actions { --action-size: 42px; }
+}
+
 /* Basic GUI Bundle skin for the home, settings, result, and gameplay screens.
    The ranking screen keeps its existing artwork and styles untouched. */
 .gui-panel {
