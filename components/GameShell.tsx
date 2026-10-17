@@ -372,7 +372,7 @@ export function GameShell() {
               <small>ESC PARA CONTINUAR</small>
             </section>
           </div>}
-          <div className="game-hint"><span>← → ANDAR</span><span>↓ AGACHAR</span><span>ESPAÇO PULAR</span><span>SHIFT DASH</span><span>X SOCAR</span><span>ESC PAUSA</span></div>
+          <div className="game-hint"><span>← → ANDAR</span><span>↓ AGACHAR</span><span>ESPAÇO 2× PULO DUPLO</span><span>SHIFT DASH</span><span>X SOCAR</span><span>ESC PAUSA</span></div>
         </section>
         <div className="portrait-message"><span>↻</span><strong>Gire o aparelho</strong><small>NEON TRIAL foi projetado para jogar na horizontal.</small></div>
       </main>
