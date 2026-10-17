@@ -1,7 +1,7 @@
 export const GAME_VERSION = "neon-trial-0.2.0";
 export const STARTING_LIVES = 4;
 export const PLAYER_MAX_HEALTH = 100;
-export const MONSTER_DAMAGE = 25;
+export const PLAYER_DAMAGE_PER_HIT = 25;
 export const SURVIVAL_SCORE_PER_SECOND = 1;
 
 export const SCORE = {
