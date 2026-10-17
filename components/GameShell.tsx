@@ -11,6 +11,28 @@ import { ApiError, claimRemoteNickname, createRemoteAttempt, fetchRanking, forge
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
 type Screen = "home" | "game" | "ranking" | "settings" | "result";
+type FullscreenDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
+type FullscreenRoot = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+
+function fullscreenElement() {
+  const fullscreenDocument = document as FullscreenDocument;
+  return fullscreenDocument.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement ?? null;
+}
+
+async function enterGameFullscreen() {
+  if (fullscreenElement()) return;
+  const root = document.documentElement as FullscreenRoot;
+  if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: "hide" });
+  else await root.webkitRequestFullscreen?.();
+}
+
+async function exitGameFullscreen() {
+  if (!fullscreenElement()) return;
+  const fullscreenDocument = document as FullscreenDocument;
+  if (fullscreenDocument.exitFullscreen) await fullscreenDocument.exitFullscreen();
+  else await fullscreenDocument.webkitExitFullscreen?.();
+}
+
 const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, lives: 4, health: PLAYER_MAX_HEALTH, maxHealth: PLAYER_MAX_HEALTH, distance: 0, dashReady: true, checkpoint: 0 };
 type RankRow = { position: number; nickname: string; best_score: number };
 const RANKING_NAME_LAYERS = ["Layer_43", "Layer_39", "Layer_35", "Layer_32", "Layer_29", "Layer_26", "Layer_23"];
@@ -57,6 +79,9 @@ export function GameShell() {
   const audio = useMemo(() => new AudioFeedback(), []);
   const [screen, setScreen] = useState<Screen>("home");
   const [paused, setPaused] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenSupported, setFullscreenSupported] = useState(false);
+  const [fullscreenNotice, setFullscreenNotice] = useState("");
   const nickname = useSyncExternalStore(subscribeNickname, getNickname, () => "");
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [runId, setRunId] = useState(0);
@@ -81,6 +106,34 @@ export function GameShell() {
   const [rankReload, setRankReload] = useState(0);
   const rankingSvgRef = useRef<HTMLObjectElement>(null);
   const attemptRef = useRef<Promise<{ id: string; token: string } | null>>(Promise.resolve(null));
+
+  useEffect(() => {
+    const root = document.documentElement as FullscreenRoot;
+    setFullscreenSupported(Boolean(root.requestFullscreen || root.webkitRequestFullscreen));
+    const syncFullscreen = () => setIsFullscreen(Boolean(fullscreenElement()));
+    syncFullscreen();
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    document.addEventListener("webkitfullscreenchange", syncFullscreen);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreen);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreen);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (screen !== "game") void exitGameFullscreen().catch(() => undefined);
+  }, [screen]);
+
+  const toggleFullscreen = async () => {
+    controls.releaseAll();
+    setFullscreenNotice("");
+    try {
+      if (fullscreenElement()) await exitGameFullscreen();
+      else await enterGameFullscreen();
+    } catch {
+      setFullscreenNotice("Não foi possível abrir em tela cheia.");
+    }
+  };
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
@@ -207,6 +260,8 @@ export function GameShell() {
     controls.releaseAll();
     setPaused(false);
     setResult(null);
+    setFullscreenNotice("");
+    const fullscreenRequest = enterGameFullscreen().catch(() => undefined);
     setHud(EMPTY_HUD);
     setSubmissionStatus("idle");
     setSubmissionMessage("");
@@ -223,6 +278,7 @@ export function GameShell() {
     setScreen("game");
     void audio.unlock().catch(() => undefined);
     try {
+      await fullscreenRequest;
       const orientation = window.screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
       await orientation.lock?.("landscape");
     } catch {
@@ -291,11 +347,15 @@ export function GameShell() {
             </div>
             <div className="hud-tools">
               <div className="hud-menu-buttons">
+                {fullscreenSupported && <button type="button" className="hud-icon-button" onClick={() => void toggleFullscreen()} aria-label={isFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"} title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"} aria-pressed={isFullscreen}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={isFullscreen ? "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5" : "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"} /></svg>
+                </button>}
                 <button type="button" className="hud-icon-button" onClick={() => { controls.releaseAll(); setPaused(false); setScreen("home"); }} aria-label="Voltar ao menu"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Home.png" alt="" draggable={false} /></button>
                 <button type="button" className="hud-icon-button pause-trigger" onClick={() => setPaused(true)} aria-label="Pausar partida"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Pause.png" alt="" draggable={false} /></button>
               </div>
               <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
               <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
+              {fullscreenNotice && <span className="fullscreen-notice" role="status">{fullscreenNotice}</span>}
             </div>
           </div>
           <GameCanvas runId={runId} controls={controls} audio={audio} onHud={onHud} onResult={onResult} paused={paused} />
