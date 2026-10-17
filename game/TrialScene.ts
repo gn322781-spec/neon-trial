@@ -241,6 +241,7 @@ export class TrialScene extends Phaser.Scene {
   private dashUntil = 0;
   private nextDashAt = 0;
   private invulnerableUntil = 0;
+  private damageFlashUntil = 0;
   private facing = 1;
   private hudAt = 0;
   private respawning = false;
@@ -902,7 +903,9 @@ export class TrialScene extends Phaser.Scene {
     }
 
     this.updatePlayerArt(time, grounded, direction, input.down);
-    this.playerArt.setTint(time < this.invulnerableUntil ? 0x62ffb3 : 0xffffff);
+    const flashRed = time < this.damageFlashUntil
+      && Math.floor((this.damageFlashUntil - time) / 100) % 2 === 1;
+    this.playerArt.setTint(flashRed ? 0xff4444 : 0xffffff);
     if (time >= this.hudAt) this.emitHud();
     this.previous = input;
   }
@@ -1187,6 +1190,8 @@ export class TrialScene extends Phaser.Scene {
   private takeMonsterDamage(time: number) {
     if (this.respawning || this.finished || time < this.invulnerableUntil) return;
     this.health = Math.max(0, this.health - MONSTER_DAMAGE);
+    this.damageFlashUntil = time + 750;
+    this.playerArt.setTint(0xff4444);
     this.playEffect("fx-player-impact", this.player.x, this.player.y, 68);
     if (this.health === 0) {
       this.die();
@@ -1235,6 +1240,8 @@ export class TrialScene extends Phaser.Scene {
       this.positionPlayerArt();
       this.playerArt.setAlpha(1);
       this.health = PLAYER_MAX_HEALTH;
+      this.damageFlashUntil = 0;
+      this.playerArt.clearTint();
       this.invulnerableUntil = this.time.now + 1_050;
       this.nextDashAt = this.time.now;
       this.respawning = false;
