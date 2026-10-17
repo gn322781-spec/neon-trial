@@ -292,7 +292,7 @@ export class TrialScene extends Phaser.Scene {
     this.load.image(PLAYER_TEXTURES.walkTwo, "/character/03_andando_passada_2.png");
     this.load.image(PLAYER_TEXTURES.crouch, "/character/04_agachado.png");
     this.load.image(PLAYER_TEXTURES.jumpRise, "/character/05_pulo_subida.png");
-    this.load.image(PLAYER_TEXTURES.jumpAir, "/character/06_pulo_no_ar.png");
+    this.load.image(PLAYER_TEXTURES.jumpAir, "/character/06_pulo_no_ar.png?v=2");
     this.load.image(PLAYER_TEXTURES.landing, "/character/07_aterrissagem.png");
     this.load.image(PLAYER_TEXTURES.dash, "/character/08_dash_ataque.png");
     PLAYER_ATTACK_TEXTURES.forEach((key, index) => {
@@ -946,16 +946,17 @@ export class TrialScene extends Phaser.Scene {
     else if (!grounded) texture = this.body.velocity.y < 0 ? PLAYER_TEXTURES.jumpRise : PLAYER_TEXTURES.jumpAir;
     else if (direction) texture = Math.floor(time / 150) % 2 === 0 ? PLAYER_TEXTURES.walkOne : PLAYER_TEXTURES.walkTwo;
 
-    if (this.playerArt.texture.key !== texture) {
-      this.playerArt.setTexture(texture);
-      if (motorcycleAnimationFrame) this.playerArt.setScale(MOTORCYCLE_RIDE_FRAME_SCALE);
-      else if (ridingMotorcycle) this.playerArt.setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height);
-      else if (texture === PLAYER_TEXTURES.jumpAir) this.playerArt.setScale(PLAYER_JUMP_AIR_DISPLAY_HEIGHT / this.playerArt.height);
-      else {
-        const attackFrameIndex = PLAYER_ATTACK_TEXTURES.indexOf(texture as typeof PLAYER_ATTACK_TEXTURES[number]);
-        const attackFrameHeight = PLAYER_ATTACK_FRAME_HEIGHTS[attackFrameIndex];
-        this.playerArt.setScale(attackFrameHeight ? PLAYER_ART_HEIGHT / attackFrameHeight : PLAYER_ART_SCALE);
-      }
+    if (this.playerArt.texture.key !== texture) this.playerArt.setTexture(texture);
+    // Reapply the pose size so respawning cannot leave another frame's scale behind.
+    if (motorcycleAnimationFrame) this.playerArt.setScale(MOTORCYCLE_RIDE_FRAME_SCALE);
+    else if (ridingMotorcycle) this.playerArt.setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height);
+    else if (texture === PLAYER_TEXTURES.jumpAir) {
+      const aspectRatio = this.playerArt.frame.realWidth / this.playerArt.frame.realHeight;
+      this.playerArt.setDisplaySize(PLAYER_JUMP_AIR_DISPLAY_HEIGHT * aspectRatio, PLAYER_JUMP_AIR_DISPLAY_HEIGHT);
+    } else {
+      const attackFrameIndex = PLAYER_ATTACK_TEXTURES.indexOf(texture as typeof PLAYER_ATTACK_TEXTURES[number]);
+      const attackFrameHeight = PLAYER_ATTACK_FRAME_HEIGHTS[attackFrameIndex];
+      this.playerArt.setScale(attackFrameHeight ? PLAYER_ART_HEIGHT / attackFrameHeight : PLAYER_ART_SCALE);
     }
     this.positionPlayerArt();
     this.playerArt.setFlipX(this.facing < 0);
@@ -1315,7 +1316,7 @@ export class TrialScene extends Phaser.Scene {
       this.cameras.main.centerOn(this.player.x, this.cameras.main.midPoint.y);
       this.body.setVelocity(0, 0);
       this.body.setAllowGravity(true);
-      this.playerArt.setTexture(PLAYER_TEXTURES.idle);
+      this.playerArt.setTexture(PLAYER_TEXTURES.idle).setScale(PLAYER_ART_SCALE);
       this.positionPlayerArt();
       this.playerArt.setAlpha(1);
       this.health = PLAYER_MAX_HEALTH;
