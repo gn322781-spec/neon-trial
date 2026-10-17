@@ -44,6 +44,7 @@ type GeneratedSegment = {
   enemies: EnemyUnit[];
 };
 type BackgroundLayer = { sprite: Phaser.GameObjects.TileSprite; parallax: number };
+type CheckpointSurface = { left: number; right: number; surfaceY: number };
 type Keys = {
   left: Phaser.Input.Keyboard.Key; right: Phaser.Input.Keyboard.Key; jump: Phaser.Input.Keyboard.Key;
   dash: Phaser.Input.Keyboard.Key; attack: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key;
@@ -129,7 +130,13 @@ const CHECKPOINT_ALTAR_TEXTURE = "checkpoint-altar";
 const CHECKPOINT_ALTAR_ANIMATION = "checkpoint-altar-idle";
 const CHECKPOINT_ALTAR_FRAME_SIZE = { frameWidth: 654, frameHeight: 600 };
 const CHECKPOINT_ALTAR_DISPLAY_SIZE = { width: 88, height: 81 };
-const CHECKPOINT_ALTAR_BASELINE = 0.883;
+// Each source frame has a different transparent margin around the carpet.
+const CHECKPOINT_ALTAR_FRAME_ANCHORS = [
+  { x: 335.5 / 654, y: 566 / 600 },
+  { x: 320.5 / 654, y: 566 / 600 },
+  { x: 336 / 654, y: 531 / 600 },
+  { x: 320.5 / 654, y: 532 / 600 },
+] as const;
 const CHECKPOINT_GLOW_ANIMATION = "checkpoint-glow-loop";
 const CHECKPOINT_GLOW_DISPLAY_SIZE = { width: 88, height: 59 };
 // Visible center and bottom of the six smoke orb frames in the 512px cells.
@@ -221,6 +228,8 @@ export class TrialScene extends Phaser.Scene {
   private previous: MobileSnapshot = { left: false, right: false, jump: false, dash: false, attack: false };
   private runStartedAt = 0;
   private checkpointX = 75;
+  private checkpointY = PLAYER_START_Y;
+  private checkpointCount = 0;
   private nextEndlessCheckpointX = WORLD_WIDTH + 80;
   private generatedChunkCount = 0;
   private lastEndlessIslandVariant = -1;
@@ -370,9 +379,12 @@ export class TrialScene extends Phaser.Scene {
           right: platform.x + platform.width / 2,
           surfaceY: platform.y - (platform.height ?? 60) / 2,
         }))
-        .filter((platform) => zone.checkpoint >= platform.left && zone.checkpoint <= platform.right)
-        .sort((left, right) => left.surfaceY - right.surfaceY)[0];
-      this.addCheckpoint(zone.checkpoint, checkpointPlatform?.surfaceY ?? GROUND_TOP);
+        .sort((left, right) => {
+          const leftGap = Math.max(left.left - zone.checkpoint, zone.checkpoint - left.right, 0);
+          const rightGap = Math.max(right.left - zone.checkpoint, zone.checkpoint - right.right, 0);
+          return leftGap - rightGap || left.surfaceY - right.surfaceY;
+        })[0];
+      this.addCheckpoint(zone.checkpoint, checkpointPlatform);
     }
 
     this.add.text(4_040, 260, "ENDLESS / KEEP RUNNING", { fontFamily: "monospace", fontSize: "18px", color: "#c6b2ff" });
@@ -605,12 +617,22 @@ export class TrialScene extends Phaser.Scene {
     }
   }
 
-  private addCheckpoint(x: number, surfaceY: number, objects?: Phaser.GameObjects.GameObject[]) {
-    const altar = this.add.sprite(x, surfaceY, CHECKPOINT_ALTAR_TEXTURE)
+  private addCheckpoint(x: number, surface: CheckpointSurface, objects?: Phaser.GameObjects.GameObject[]) {
+    const inset = CHECKPOINT_ALTAR_DISPLAY_SIZE.width / 2 + 6;
+    const minX = surface.left + inset;
+    const maxX = surface.right - inset;
+    const centerX = minX <= maxX ? Phaser.Math.Clamp(x, minX, maxX) : (surface.left + surface.right) / 2;
+    const anchor = CHECKPOINT_ALTAR_FRAME_ANCHORS[0];
+    const altar = this.add.sprite(centerX, surface.surfaceY, CHECKPOINT_ALTAR_TEXTURE)
       .setDisplaySize(CHECKPOINT_ALTAR_DISPLAY_SIZE.width, CHECKPOINT_ALTAR_DISPLAY_SIZE.height)
-      .setOrigin(0.5, CHECKPOINT_ALTAR_BASELINE)
+      .setOrigin(anchor.x, anchor.y)
       .setDepth(2)
-      .play(CHECKPOINT_ALTAR_ANIMATION);
+      .setData("surfaceY", surface.surfaceY);
+    altar.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_animation: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+      const frameAnchor = CHECKPOINT_ALTAR_FRAME_ANCHORS[Number(frame.textureFrame)] ?? anchor;
+      altar.setOrigin(frameAnchor.x, frameAnchor.y);
+    });
+    altar.play(CHECKPOINT_ALTAR_ANIMATION);
     this.checkpointAltars.push(altar);
     objects?.push(altar);
     return altar;
@@ -742,7 +764,12 @@ export class TrialScene extends Phaser.Scene {
       }, segment);
     }
 
-    segment.checkpoint = this.addCheckpoint(segment.checkpointX, platforms[0].surfaceY, segment.objects);
+    const checkpointPlatform = platforms[0];
+    segment.checkpoint = this.addCheckpoint(segment.checkpointX, {
+      left: checkpointPlatform.center - checkpointPlatform.width / 2,
+      right: checkpointPlatform.center + checkpointPlatform.width / 2,
+      surfaceY: checkpointPlatform.surfaceY,
+    }, segment.objects);
     this.generatedSegments.push(segment);
     this.worldEndX = end + CHUNK_AHEAD * this.viewWidth;
     this.physics.world.setBounds(0, 0, this.worldEndX, VIEW_HEIGHT + 1_200);
@@ -1119,16 +1146,15 @@ export class TrialScene extends Phaser.Scene {
     for (let index = 0; index < ZONES.length; index += 1) {
       const boundary = ZONES[index].end;
       if (this.player.x >= boundary && this.award("zone", `zone:${index}`)) this.emitHud();
-      if (this.player.x >= ZONES[index].checkpoint && this.checkpointX < ZONES[index].checkpoint) {
-        this.checkpointX = ZONES[index].checkpoint;
-        this.activateCheckpoint(this.checkpointAltars[index]);
+      const altar = this.checkpointAltars[index];
+      if (altar && this.player.x >= altar.x && !altar.getData("activated")) {
+        this.activateCheckpoint(altar);
         this.audio.play("checkpoint");
         this.emitHud();
       }
     }
     while (this.player.x >= this.nextEndlessCheckpointX) {
-      this.checkpointX = this.nextEndlessCheckpointX;
-      const segment = this.generatedSegments.find((item) => item.checkpointX === this.checkpointX);
+      const segment = this.generatedSegments.find((item) => item.checkpointX === this.nextEndlessCheckpointX);
       this.activateCheckpoint(segment?.checkpoint);
       this.nextEndlessCheckpointX += SEGMENT_LENGTH;
       this.audio.play("checkpoint");
@@ -1138,7 +1164,11 @@ export class TrialScene extends Phaser.Scene {
 
   private activateCheckpoint(altar?: Phaser.GameObjects.Sprite) {
     if (!altar?.active) return;
-    if (altar.getData("checkpointGlow")) return;
+    if (altar.getData("activated")) return;
+    altar.setData("activated", true);
+    this.checkpointX = altar.x;
+    this.checkpointY = Number(altar.getData("surfaceY")) - PLAYER_BODY_HEIGHT / 2;
+    this.checkpointCount += 1;
 
     const glow = this.add.sprite(
       altar.x,
@@ -1147,13 +1177,14 @@ export class TrialScene extends Phaser.Scene {
     )
       .setDisplaySize(CHECKPOINT_GLOW_DISPLAY_SIZE.width, CHECKPOINT_GLOW_DISPLAY_SIZE.height)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(1)
+      .setDepth(3)
       .setAlpha(0.9)
       .play(CHECKPOINT_GLOW_ANIMATION);
     altar.setData("checkpointGlow", glow);
     const ownerSegment = this.generatedSegments.find((segment) => segment.checkpoint === altar);
     ownerSegment?.objects.push(glow);
   }
+
   private die() {
     if (this.respawning || this.finished || performance.now() < this.invulnerableUntil) return;
     for (const projectile of this.enemyProjectiles) projectile.sprite.destroy();
@@ -1182,7 +1213,7 @@ export class TrialScene extends Phaser.Scene {
       return;
     }
     this.time.delayedCall(420, () => {
-      this.player.setPosition(this.checkpointX, PLAYER_START_Y).setAlpha(1);
+      this.player.setPosition(this.checkpointX, this.checkpointY).setAlpha(1);
       this.cameras.main.centerOn(this.player.x, this.cameras.main.midPoint.y);
       this.body.setVelocity(0, 0);
       this.body.setAllowGravity(true);
@@ -1216,8 +1247,7 @@ export class TrialScene extends Phaser.Scene {
       lives: Math.max(0, STARTING_LIVES - this.deaths),
       distance,
       dashReady: this.time.now >= this.nextDashAt,
-      checkpoint: ZONES.filter((zone) => zone.checkpoint <= this.checkpointX).length
-        + Math.max(0, Math.floor((this.checkpointX - (WORLD_WIDTH + 80)) / SEGMENT_LENGTH) + 1),
+      checkpoint: this.checkpointCount,
     };
   }
 
