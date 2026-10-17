@@ -244,6 +244,7 @@ export class TrialScene extends Phaser.Scene {
   private health = PLAYER_MAX_HEALTH;
   private coyoteUntil = 0;
   private jumpBufferUntil = 0;
+  private airJumpAvailable = true;
   private dashUntil = 0;
   private nextDashAt = 0;
   private invulnerableUntil = 0;
@@ -849,8 +850,11 @@ export class TrialScene extends Phaser.Scene {
     const justPressed = (action: keyof MobileSnapshot) => input[action] && !this.previous[action];
     if (input.left) this.facing = -1;
     if (input.right) this.facing = 1;
-    const grounded = this.body.blocked.down || this.body.touching.down;
-    if (grounded) this.coyoteUntil = time + PHYSICS.coyoteMs;
+    const grounded = (this.body.blocked.down || this.body.touching.down) && this.body.velocity.y >= 0;
+    if (grounded) {
+      this.coyoteUntil = time + PHYSICS.coyoteMs;
+      this.airJumpAvailable = true;
+    }
     if (justPressed("jump")) this.jumpBufferUntil = time + PHYSICS.jumpBufferMs;
 
     const direction = Number(input.right) - Number(input.left);
@@ -880,6 +884,13 @@ export class TrialScene extends Phaser.Scene {
         this.body.setVelocity(this.facing * PHYSICS.wallJumpX, -PHYSICS.jumpSpeed * 0.94);
         this.audio.play("jump");
         this.jumpBufferUntil = 0;
+      } else if (time < this.jumpBufferUntil && this.airJumpAvailable) {
+        this.body.setVelocityY(-PHYSICS.jumpSpeed);
+        this.airJumpAvailable = false;
+        this.jumpBufferUntil = 0;
+        this.coyoteUntil = 0;
+        this.audio.play("jump");
+        this.playEffect("fx-dash-smoke", this.player.x, this.player.y + PLAYER_ART_FOOT_OFFSET, 54, 36, this.facing < 0);
       }
 
       this.body.setVelocityY(jumpVelocityAfterRelease(this.body.velocity.y, input.jump));
@@ -1316,6 +1327,9 @@ export class TrialScene extends Phaser.Scene {
       this.cameras.main.centerOn(this.player.x, this.cameras.main.midPoint.y);
       this.body.setVelocity(0, 0);
       this.body.setAllowGravity(true);
+      this.airJumpAvailable = true;
+      this.jumpBufferUntil = 0;
+      this.coyoteUntil = 0;
       this.playerArt.setTexture(PLAYER_TEXTURES.idle).setScale(PLAYER_ART_SCALE);
       this.positionPlayerArt();
       this.playerArt.setAlpha(1);
