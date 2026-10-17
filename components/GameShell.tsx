@@ -271,18 +271,26 @@ export function GameShell() {
     return (
       <main className={`play-screen${paused ? " is-paused" : ""}`}>
         <section className="game-frame" aria-label="Partida em andamento">
-          <div className="game-topbar">
-            <button type="button" className="hud-icon-button" onClick={() => { controls.releaseAll(); setPaused(false); setScreen("home"); }} aria-label="Voltar ao menu"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Home.png" alt="" draggable={false} /></button>
-            <div className="hud-stat"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Star.png" alt="" draggable={false} />PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
-            <div className="hud-stat"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Arrow.png" alt="" draggable={false} />SETOR</span><strong>{String(hud.zone).padStart(2, "0")}</strong></div>
-            <div className="hud-stat checkpoint-hud"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Check.png" alt="" draggable={false} />CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}</strong></div>
-            <div className="hud-stat"><span>QUEDAS</span><strong>{hud.deaths}</strong></div>
-            <div className="lives-hud" role="img" aria-label={`Vidas restantes: ${hud.lives} de 4`} title={`Vidas: ${hud.lives} de 4`}>
-              {Array.from({ length: 4 }, (_, index) => <img key={index} className={`life-heart-img ${index < hud.lives ? "active" : "lost"}`} src={`/ui/basic-gui/Icons/Icon_Large_Heart${index < hud.lives ? "Full" : "Empty"}.png`} alt="" aria-hidden="true" draggable={false} />)}
+          <div className="game-hud" aria-label="Informações da partida">
+            <div className="hud-player">
+              <div className="lives-hud" role="img" aria-label={`Vidas restantes: ${hud.lives} de 4`} title={`Vidas: ${hud.lives} de 4`}>
+                {Array.from({ length: 4 }, (_, index) => <img key={index} className={`life-heart-img ${index < hud.lives ? "active" : "lost"}`} src={`/ui/basic-gui/Icons/Icon_Large_Heart${index < hud.lives ? "Full" : "Empty"}.png`} alt="" aria-hidden="true" draggable={false} />)}
+              </div>
+              <div className="hud-stat score-hud"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Star.png" alt="" draggable={false} />PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
+              <div className="hud-progress">
+                <div className="hud-stat"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Arrow.png" alt="" draggable={false} />SETOR</span><strong>{String(hud.zone).padStart(2, "0")}</strong></div>
+                <div className="hud-stat checkpoint-hud"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Check.png" alt="" draggable={false} />CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}</strong></div>
+                <div className="hud-stat"><span>QUEDAS</span><strong>{hud.deaths}</strong></div>
+              </div>
             </div>
-            <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
-            <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
-            <button type="button" className="hud-icon-button pause-trigger" onClick={() => setPaused(true)} aria-label="Pausar partida"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Pause.png" alt="" draggable={false} /></button>
+            <div className="hud-tools">
+              <div className="hud-menu-buttons">
+                <button type="button" className="hud-icon-button" onClick={() => { controls.releaseAll(); setPaused(false); setScreen("home"); }} aria-label="Voltar ao menu"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Home.png" alt="" draggable={false} /></button>
+                <button type="button" className="hud-icon-button pause-trigger" onClick={() => setPaused(true)} aria-label="Pausar partida"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Pause.png" alt="" draggable={false} /></button>
+              </div>
+              <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
+              <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
+            </div>
           </div>
           <GameCanvas runId={runId} controls={controls} audio={audio} onHud={onHud} onResult={onResult} paused={paused} />
           {paused && <div className="pause-overlay">

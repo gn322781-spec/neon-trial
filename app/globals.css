@@ -523,3 +523,83 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   .game-topbar { border-width: 7px; border-image-width: 7px; }
   .pause-card h1 { min-height: 54px; }
 }
+
+/* Game information floats over the scene, leaving the playfield uninterrupted. */
+.game-hud {
+  position: absolute;
+  z-index: 3;
+  top: clamp(14px, 2.2vw, 26px);
+  right: clamp(14px, 2.2vw, 26px);
+  left: clamp(14px, 2.2vw, 26px);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  pointer-events: none;
+  user-select: none;
+  text-shadow: -1px -1px 0 #191320, 1px -1px 0 #191320, -1px 1px 0 #191320, 1px 1px 0 #191320, 0 2px 3px #191320;
+}
+.hud-player { display: grid; justify-items: start; gap: 10px; min-width: 0; }
+.game-hud .lives-hud { min-height: 0; gap: 4px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.game-hud .life-heart-img { width: clamp(22px, 2.4vw, 30px); filter: drop-shadow(0 2px 2px rgba(12, 7, 20, .7)); }
+.game-hud .life-heart-img.lost { opacity: .75; filter: grayscale(.5) drop-shadow(0 2px 2px rgba(12, 7, 20, .7)); }
+.game-hud .hud-stat { min-width: 0; gap: 3px; }
+.game-hud .hud-stat > span { gap: 4px; color: #f7efff; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-shadow: inherit; }
+.game-hud .hud-stat > span img { width: 15px; height: 15px; filter: drop-shadow(0 1px 1px #191320); }
+.game-hud .hud-stat strong { color: #fff; font-size: 17px; font-weight: 900; line-height: 1.1; text-shadow: inherit; }
+.game-hud .score-hud { display: flex; align-items: center; gap: 10px; }
+.game-hud .score-hud > span img { width: 22px; height: 22px; }
+.game-hud .score-hud strong { font-size: clamp(24px, 2.5vw, 32px); font-variant-numeric: tabular-nums; }
+.hud-progress { display: flex; align-items: start; gap: clamp(14px, 2vw, 26px); }
+.hud-tools { display: grid; justify-items: end; gap: 10px; flex: 0 0 auto; }
+.hud-menu-buttons { display: flex; gap: 9px; }
+.game-hud .hud-icon-button { width: 44px; height: 44px; pointer-events: auto; filter: drop-shadow(0 2px 3px rgba(12, 7, 20, .55)); }
+.game-hud .hud-icon-button img { width: 22px; height: 22px; }
+.game-hud .dash-state { gap: 6px; margin: 0; color: #f4eaff; font-size: 9px; font-weight: 800; text-shadow: inherit; }
+.game-hud .dash-state.ready { color: #9bffff; text-shadow: inherit; }
+.game-hud .attempt-state { color: #e0d8ed; font-size: 7px; text-shadow: inherit; }
+.game-hint {
+  right: auto;
+  bottom: 10px;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 320px);
+  min-height: 0;
+  transform: translateX(-50%);
+  gap: 5px 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px #191320, 1px 0 2px #191320, -1px 0 2px #191320;
+  pointer-events: none;
+}
+@media (max-width: 900px), (max-height: 510px) {
+  .game-hud { top: 12px; right: 14px; left: 14px; gap: 18px; }
+  .hud-player { gap: 7px; }
+  .game-hud .life-heart-img { width: 22px; }
+  .game-hud .hud-stat > span { font-size: 8px; }
+  .game-hud .hud-stat strong { font-size: 14px; }
+  .game-hud .score-hud strong { font-size: 24px; }
+  .hud-progress { gap: 16px; }
+  .hud-tools { gap: 7px; }
+  .game-hud .hud-icon-button { width: 38px; height: 38px; }
+  .game-hud .hud-icon-button img { width: 19px; height: 19px; }
+  .game-hud .attempt-state, .game-hint { display: none; }
+}
+@media (max-width: 600px), (max-height: 360px) {
+  .game-hud { top: 9px; right: 11px; left: 11px; }
+  .hud-player { gap: 5px; }
+  .game-hud .life-heart-img { width: 19px; }
+  .game-hud .score-hud { gap: 7px; }
+  .hud-progress { gap: 12px; }
+  .game-hud .hud-stat > span { font-size: 7px; }
+  .game-hud .hud-stat > span img { width: 11px; height: 11px; }
+  .game-hud .hud-stat strong { font-size: 12px; }
+  .game-hud .score-hud > span img { width: 18px; height: 18px; }
+  .game-hud .score-hud strong { font-size: 21px; }
+  .game-hud .hud-icon-button { width: 34px; height: 34px; }
+  .game-hud .dash-state { font-size: 8px; }
+}
