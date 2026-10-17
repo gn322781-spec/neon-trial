@@ -349,7 +349,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 .home-screen .hero-copy::after { opacity: .09; }
 .home-screen .hero .eyebrow,
 .settings-screen .eyebrow,
-.result-screen .eyebrow { color: #252c38; font-weight: 900; text-shadow: 0 1px rgba(255,255,255,.16); }
+.result-screen .eyebrow { color: #fff; font-weight: 900; text-shadow: 1px 1px #252c38; }
 .home-screen .hero .eyebrow { border: 2px solid #252a32; background: #69758a; color: #fff; }
 .home-screen .live-dot { background: #29c600; box-shadow: 0 0 0 2px #10141b, 0 0 8px #59ef35; }
 .home-screen .hero h1,
@@ -382,7 +382,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   border-radius: 0;
   background: url("/ui/basic-gui/ButtonsText/ButtonText_Large_GreyOutline_Round.png") center / 100% 100% no-repeat;
   color: #fff;
-  font: 900 clamp(7px, .8vw, 10px)/1 "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+  font: 900 clamp(9px, 1vw, 12px)/1 "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
   letter-spacing: .025em;
   text-shadow: 0 1px 1px #29303b;
 }
@@ -394,6 +394,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   color: #fff;
   font-family: "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
   font-weight: 900;
+  font-size: clamp(12px, 1.15vw, 16px);
+  -webkit-text-stroke: .35px currentColor;
   text-shadow: 0 2px 0 #813e05, 1px 1px 0 #813e05, -1px -1px 0 #813e05;
 }
 .home-screen .secondary-button, .result-screen .secondary-button, .pause-actions .secondary-button {
@@ -401,6 +403,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   color: #fff;
   font-family: "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
   font-weight: 900;
+  font-size: clamp(12px, 1.15vw, 16px);
+  -webkit-text-stroke: .35px currentColor;
   text-shadow: 0 2px 0 #202630, 1px 1px 0 #202630, -1px -1px 0 #202630;
 }
 .pause-actions .pause-exit {
@@ -430,7 +434,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   padding: 0 11px;
   background: url("/ui/basic-gui/ButtonsText/ButtonText_Large_GreyOutline_Round.png") center / 100% 100% no-repeat;
   color: #fff;
-  font: 900 9px/1 "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+  font: 900 11px/1 "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
   letter-spacing: .025em;
   text-shadow: 0 1px 1px #29303b;
 }
@@ -512,8 +516,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 .play-screen { background: radial-gradient(ellipse at 50% 40%, #352248, #14121e 72%); }
 
 @media (max-width: 650px) {
-  .home-screen .settings-link { width: min(164px, 48%); font-size: 7px; }
-  .settings-screen .gui-back-link { min-width: 156px; font-size: 7px; }
+  .home-screen .settings-link { width: min(164px, 48%); font-size: 8px; }
+  .settings-screen .gui-back-link { min-width: 156px; font-size: 8px; }
   .home-screen .gui-panel, .settings-screen .gui-panel, .result-screen .gui-panel, .pause-card.gui-panel { border-width: 16px; border-image-width: 16px; }
   .home-screen .feature-strip > div { border-width: 10px; border-image-width: 10px; }
   .game-topbar { border-width: 7px; border-image-width: 7px; }
