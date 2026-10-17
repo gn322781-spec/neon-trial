@@ -11,14 +11,24 @@ const BUTTONS: { action: Action; label: string; className: string; icon?: string
   { action: "attack", label: "ATQ", className: "attack", icon: "square" },
 ];
 
-export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
+type PhaserGameHandle = {
+  destroy: (removeCanvas: boolean, noReturn?: boolean) => void;
+  scale: { setGameSize: (width: number, height: number) => unknown };
+  scene: { pause: (key: string) => unknown; resume: (key: string) => unknown };
+};
+
+export function GameCanvas({ runId, controls, audio, onHud, onResult, paused = false }: {
   runId: number;
   controls: Controls;
   audio: AudioFeedback;
   onHud: (hud: TrialHud) => void;
   onResult: (result: TrialResult) => void;
+  paused?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<PhaserGameHandle | null>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   const activePointers = useRef(new Map<number, Action>());
   const joystickRef = useRef<HTMLButtonElement>(null);
   const joystickPointerId = useRef<number | null>(null);
@@ -30,10 +40,7 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
   }, [controls]);
 
   useEffect(() => {
-    let game: {
-      destroy: (removeCanvas: boolean, noReturn?: boolean) => void;
-      scale: { setGameSize: (width: number, height: number) => unknown };
-    } | undefined;
+    let game: PhaserGameHandle | undefined;
     let resizeObserver: ResizeObserver | undefined;
     let scheduleResize: (() => void) | undefined;
     let resizeFrame = 0;
@@ -55,7 +62,7 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
       };
       const initialSize = measureGameSize() ?? { width: Math.round(gameHeight * 16 / 9), height: gameHeight };
       let currentWidth = initialSize.width;
-      game = new Phaser.Game({
+      const instance = new Phaser.Game({
         type: Phaser.AUTO,
         parent: hostRef.current,
         backgroundColor: "#070d19",
@@ -71,6 +78,9 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
         render: { antialias: true, pixelArt: false, powerPreference: "high-performance" },
         scene: [scene],
       });
+      game = instance;
+      gameRef.current = instance;
+      if (pausedRef.current) instance.scene.pause("TrialScene");
       const resizeGame = () => {
         resizeFrame = 0;
         if (!game) return;
@@ -102,9 +112,21 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult }: {
         window.removeEventListener("orientationchange", scheduleResize);
       }
       if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
+      if (gameRef.current === game) gameRef.current = null;
       game?.destroy(true);
     };
   }, [runId, controls, audio, onHud, onResult, resetJoystick]);
+
+  useEffect(() => {
+    if (paused) {
+      controls.releaseAll();
+      activePointers.current.clear();
+      resetJoystick();
+      gameRef.current?.scene.pause("TrialScene");
+      return;
+    }
+    gameRef.current?.scene.resume("TrialScene");
+  }, [paused, controls, resetJoystick]);
 
   useEffect(() => {
     const clearInputs = () => {

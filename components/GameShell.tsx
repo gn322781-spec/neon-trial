@@ -56,6 +56,7 @@ export function GameShell() {
   const controls = useMemo(() => new Controls(), []);
   const audio = useMemo(() => new AudioFeedback(), []);
   const [screen, setScreen] = useState<Screen>("home");
+  const [paused, setPaused] = useState(false);
   const nickname = useSyncExternalStore(subscribeNickname, getNickname, () => "");
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [runId, setRunId] = useState(0);
@@ -144,6 +145,7 @@ export function GameShell() {
   const onHud = useCallback((next: TrialHud) => setHud(next), []);
   const onResult = useCallback((next: TrialResult) => {
     setResult(next);
+    setPaused(false);
     setScreen("result");
     void submitRun(next);
   }, [submitRun]);
@@ -184,6 +186,17 @@ export function GameShell() {
     setScreen("ranking");
   };
 
+  useEffect(() => {
+    if (screen !== "game") return;
+    const onPauseKey = (event: KeyboardEvent) => {
+      if (event.code !== "Escape") return;
+      event.preventDefault();
+      setPaused((current) => !current);
+    };
+    window.addEventListener("keydown", onPauseKey);
+    return () => window.removeEventListener("keydown", onPauseKey);
+  }, [screen]);
+
   const start = async (nicknameForRun = nickname, localOnly = false) => {
     if (!nicknameForRun) {
       setNicknameDraft("");
@@ -192,6 +205,7 @@ export function GameShell() {
       return;
     }
     controls.releaseAll();
+    setPaused(false);
     setResult(null);
     setHud(EMPTY_HUD);
     setSubmissionStatus("idle");
@@ -255,22 +269,36 @@ export function GameShell() {
 
   if (screen === "game") {
     return (
-      <main className="play-screen">
+      <main className={`play-screen${paused ? " is-paused" : ""}`}>
         <section className="game-frame" aria-label="Partida em andamento">
           <div className="game-topbar">
-            <button className="icon-button" onClick={() => { controls.releaseAll(); setScreen("home"); }} aria-label="Voltar ao menu">←</button>
-            <div className="hud-stat"><span>PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
-            <div className="hud-stat"><span>SETOR</span><strong>{String(hud.zone).padStart(2, "0")}</strong></div>
-            <div className="hud-stat checkpoint-hud"><span>CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}</strong></div>
+            <button type="button" className="hud-icon-button" onClick={() => { controls.releaseAll(); setPaused(false); setScreen("home"); }} aria-label="Voltar ao menu"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Home.png" alt="" draggable={false} /></button>
+            <div className="hud-stat"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Star.png" alt="" draggable={false} />PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
+            <div className="hud-stat"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Arrow.png" alt="" draggable={false} />SETOR</span><strong>{String(hud.zone).padStart(2, "0")}</strong></div>
+            <div className="hud-stat checkpoint-hud"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Check.png" alt="" draggable={false} />CHECKPOINT</span><strong>{String(hud.checkpoint).padStart(2, "0")}</strong></div>
             <div className="hud-stat"><span>QUEDAS</span><strong>{hud.deaths}</strong></div>
             <div className="lives-hud" role="img" aria-label={`Vidas restantes: ${hud.lives} de 4`} title={`Vidas: ${hud.lives} de 4`}>
-              {Array.from({ length: 4 }, (_, index) => <span key={index} className={`life-heart ${index < hud.lives ? "active" : "lost"}`} aria-hidden="true">{index < hud.lives ? "♥" : "♡"}</span>)}
+              {Array.from({ length: 4 }, (_, index) => <img key={index} className={`life-heart-img ${index < hud.lives ? "active" : "lost"}`} src={`/ui/basic-gui/Icons/Icon_Large_Heart${index < hud.lives ? "Full" : "Empty"}_WhiteOutline.png`} alt="" aria-hidden="true" draggable={false} />)}
             </div>
             <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
             <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
+            <button type="button" className="hud-icon-button pause-trigger" onClick={() => setPaused(true)} aria-label="Pausar partida"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Pause.png" alt="" draggable={false} /></button>
           </div>
-          <GameCanvas runId={runId} controls={controls} audio={audio} onHud={onHud} onResult={onResult} />
-          <div className="game-hint"><span>← → MOVER</span><span>↓ AGACHAR</span><span>ESPAÇO PULAR</span><span>SHIFT DASH</span><span>X ATACAR</span></div>
+          <GameCanvas runId={runId} controls={controls} audio={audio} onHud={onHud} onResult={onResult} paused={paused} />
+          {paused && <div className="pause-overlay">
+            <section className="pause-card gui-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+              <span className="gui-kicker"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Pause.png" alt="" draggable={false} /> PARTIDA INTERROMPIDA</span>
+              <h1 id="pause-title">PAUSA</h1>
+              <p>Respire. O percurso espera por você.</p>
+              <div className="pause-actions">
+                <button type="button" className="primary-button" onClick={() => setPaused(false)}>CONTINUAR</button>
+                <button type="button" className="secondary-button" onClick={() => void start()}>RECOMEÇAR</button>
+                <button type="button" className="secondary-button pause-exit" onClick={() => { controls.releaseAll(); setPaused(false); setScreen("home"); }}>SAIR PARA O MENU</button>
+              </div>
+              <small>ESC PARA CONTINUAR</small>
+            </section>
+          </div>}
+          <div className="game-hint"><span>← → ANDAR</span><span>↓ AGACHAR</span><span>ESPAÇO PULAR</span><span>SHIFT DASH</span><span>X SOCAR</span><span>ESC PAUSA</span></div>
         </section>
         <div className="portrait-message"><span>↻</span><strong>Gire o aparelho</strong><small>NEON TRIAL foi projetado para jogar na horizontal.</small></div>
       </main>
@@ -312,9 +340,9 @@ export function GameShell() {
 
   if (screen === "settings") {
     return (
-      <main className="shell interior-screen">
-        <header className="subpage-head"><button className="text-button" onClick={() => setScreen("home")}>← MENU</button><span className="eyebrow">PREFERÊNCIAS</span></header>
-        <section className="settings-card"><span className="eyebrow">SEU PILOTO</span><h1>IDENTIDADE</h1>
+      <main className="shell interior-screen settings-screen">
+        <header className="subpage-head"><button className="text-button gui-back-link" onClick={() => setScreen("home")}><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Return.png" alt="" draggable={false} /> VOLTAR AO MENU</button><span className="eyebrow">PREFERÊNCIAS</span></header>
+        <section className="settings-card gui-panel"><span className="eyebrow">SEU PILOTO</span><h1>IDENTIDADE</h1>
           <form className="nickname-form" onSubmit={saveNickname}>
             <label htmlFor="nickname">Apelido público</label><input id="nickname" value={nicknameDraft} maxLength={16} onChange={(event) => setNicknameDraft(event.target.value)} placeholder="Ex.: Neon Runner" />
             {nicknameError && <p className="form-error">{nicknameError}</p>}
@@ -322,8 +350,8 @@ export function GameShell() {
             <p className="form-note">O apelido público não precisa ser seu nome real. Sem credenciais do Supabase, ele permanece local e não fica reservado no ranking.</p>
             <button className="primary-button compact" type="submit" disabled={profileSaving}>{profileSaving ? "VALIDANDO…" : "SALVAR APELIDO"} <span>↗</span></button>
           </form>
-          <div className="audio-settings"><label htmlFor="volume">Efeitos sonoros <b>{Math.round(volume * 100)}%</b></label><input id="volume" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); audio.setVolume(next); }} /><label className="vibration-setting"><input type="checkbox" checked={vibration} onChange={(event) => { const next = event.target.checked; setVibration(next); audio.setVibration(next); }} /> Vibração nos momentos importantes, quando suportada</label></div>
-          <div className="settings-note"><strong>CONTROLES</strong><p>Teclado: setas ou A/D para mover, ↓/S para agachar, Espaço para pular, Shift para dash e X para atacar. No celular, use os botões nas laterais; os comandos aceitam multitoque.</p></div>
+          <div className="audio-settings"><label htmlFor="volume"><span className="setting-label"><img src={`/ui/basic-gui/Icons/Icon_Small_WhiteOutline_${volume > 0 ? "Audio" : "AudioOff"}.png`} alt="" draggable={false} /> Efeitos sonoros</span><b>{Math.round(volume * 100)}%</b></label><input id="volume" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); audio.setVolume(next); }} /><label className="vibration-setting"><input type="checkbox" checked={vibration} onChange={(event) => { const next = event.target.checked; setVibration(next); audio.setVibration(next); }} /> Vibração nos momentos importantes, quando suportada</label></div>
+          <div className="settings-note"><strong>COMO JOGAR</strong><p>Teclado: setas ou A/D para andar, ↓/S para agachar, Espaço para pular, Shift para dash e X para socar. No celular, use o analógico e os botões nas laterais; os comandos aceitam multitoque.</p></div>
         </section>
       </main>
     );
@@ -331,8 +359,8 @@ export function GameShell() {
 
   if (screen === "result" && result) {
     return (
-      <main className="shell interior-screen">
-        <section className="result-card"><span className="eyebrow">PARTIDA ENCERRADA</span><h1>GAME<br /><em>OVER.</em></h1>
+      <main className="shell interior-screen result-screen">
+        <section className="result-card gui-panel"><span className="eyebrow">PARTIDA ENCERRADA</span><h1>FIM DE<br /><em>JOGO.</em></h1>
           <div className="result-score"><span>PONTUAÇÃO DA TENTATIVA</span><strong>{result.score.toLocaleString("pt-BR")}</strong></div>
           <div className="result-meta"><span>SETOR <b>{String(result.zone).padStart(2, "0")}</b></span><span>VIDAS <b>{result.lives} / 4</b></span><span>TEMPO <b>{(result.elapsedMs / 1_000).toFixed(1)}s</b></span></div>
           <p className={`pending-banner ${submissionStatus}`}>{submissionStatus === "confirmed" && recordUpdated ? "NOVO RECORDE" : submissionStatus === "confirmed" ? "RESULTADO CONFIRMADO" : submissionStatus === "pending" ? "VALIDANDO" : submissionStatus === "rejected" ? "TENTATIVA RECUSADA" : "PONTUAÇÃO NÃO CONFIRMADA"} — {submissionMessage || "Aguardando o servidor."}</p>
@@ -345,16 +373,17 @@ export function GameShell() {
   return (
     <main className="shell home-screen">
       <div className="home-grid" />
-      <header className="topbar"><a className="wordmark" href="#top" onClick={(event) => event.preventDefault()}><span className="wordmark-icon">N</span> NEON<span>TRIAL</span></a><button className="text-button settings-link" onClick={() => { setNicknameDraft(nickname); setScreen("settings"); }}>CONFIGURAÇÕES <span>↗</span></button></header>
+      <header className="topbar"><a className="wordmark" href="#top" onClick={(event) => event.preventDefault()}><span className="wordmark-icon">N</span> NEON<span>TRIAL</span></a><button className="text-button settings-link" onClick={() => { setNicknameDraft(nickname); setScreen("settings"); }}><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Menu.png" alt="" draggable={false} /> CONFIGURAÇÕES <span>↗</span></button></header>
       <section className="hero" id="top">
-        <div className="hero-copy"><span className="eyebrow"><span className="live-dot" /> SOLO PRECISION PLATFORMER / BUILD 0.2</span><h1>ONE MORE<br /><em>RUN.</em></h1><p>Salte. Acerte o tempo. Aprenda o percurso.<br />A progressão é infinita. Você tem quatro vidas.</p>
-          <div className="hero-actions"><button className="primary-button" onClick={() => void start()}>INICIAR TRIAL <span>↗</span></button><button className="secondary-button" onClick={openRanking}>RANKING GLOBAL</button></div>
+        <div className="hero-copy gui-panel"><span className="eyebrow"><span className="live-dot" /> PLATAFORMA DE PRECISÃO / VERSÃO 0.2</span><h1>MAIS UMA<br /><em>TENTATIVA.</em></h1><p>Salte, acerte o tempo e aprenda o percurso.<br />A aventura é infinita. Você tem quatro vidas.</p>
+          <div className="hero-actions"><button className="primary-button" onClick={() => void start()}>COMEÇAR PARTIDA</button><button className="secondary-button" onClick={openRanking}><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Star.png" alt="" draggable={false} /> RANKING GLOBAL</button></div>
           <div className="pilot-line"><span className="avatar">{nickname ? nickname.slice(0, 1).toUpperCase() : "?"}</span><span><small>PILOTO</small><strong>{nickname || "Escolha um apelido"}</strong></span><button className="edit-name" onClick={() => { setNicknameDraft(nickname); setScreen("settings"); }}>EDITAR ↗</button></div>
         </div>
-        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="art-platform platform-a"/><div className="art-platform platform-b"/><div className="art-platform platform-c"/><div className="art-player"/><div className="art-crystal crystal-a"/><div className="art-crystal crystal-b"/><div className="art-scanline"/><span className="art-coordinate">NEON CITY / ∞</span><span className="art-axis">RUN — JUMP — REPEAT</span></div>
+        <div className="hero-art" aria-hidden="true"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="art-platform platform-a"/><div className="art-platform platform-b"/><div className="art-platform platform-c"/><div className="art-player"/><div className="art-crystal crystal-a"/><div className="art-crystal crystal-b"/><div className="art-scanline"/><span className="art-coordinate">CIDADE NEON / ∞</span><span className="art-axis">CORRER — PULAR — REPETIR</span></div>
       </section>
-      <section className="feature-strip"><div><span>01</span><strong>PRECISÃO</strong><small>Coyote time + jump buffer</small></div><div><span>02</span><strong>PROGRESSÃO INFINITA</strong><small>Desafios mais difíceis a cada setor</small></div><div><span>03</span><strong>SEU MELHOR</strong><small>Ranking online com sua melhor pontuação</small></div></section>
+      <section className="feature-strip"><div><span>01</span><strong>PRECISÃO</strong><small>Tempo certo para pular e atacar</small></div><div><span>02</span><strong>PERCURSO INFINITO</strong><small>Novos desafios a cada setor</small></div><div><span>03</span><strong>SEU MELHOR</strong><small>Compare sua pontuação no ranking</small></div></section>
       <footer className="home-footer"><span>© NEON TRIAL / {GAME_VERSION.toUpperCase()}</span><span>UMA TENTATIVA DE CADA VEZ</span><span className="connection-state"><i /> LOCAL / SERVIDOR OFFLINE</span><span className="effects-credit">EFEITOS: SUPER PIXEL EFFECTS GIGAPACK · WILL TICE / UNTIED GAMES</span></footer>
     </main>
   );
 }
+
