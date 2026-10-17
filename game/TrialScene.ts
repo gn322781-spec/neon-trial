@@ -60,6 +60,7 @@ const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
 const PLAYER_ART_SCALE = 0.22;
 const PLAYER_ART_HEIGHT = 510 * PLAYER_ART_SCALE;
+const PLAYER_JUMP_AIR_DISPLAY_HEIGHT = 450 * PLAYER_ART_SCALE;
 const PLAYER_ATTACK_DURATION_MS = 180;
 const PLAYER_BODY_WIDTH = 40;
 const PLAYER_BODY_HEIGHT = 66;
@@ -114,7 +115,7 @@ const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.walkTwo]: 19 / 480,
   [PLAYER_TEXTURES.crouch]: 20 / 430,
   [PLAYER_TEXTURES.jumpRise]: 35 / 425,
-  [PLAYER_TEXTURES.jumpAir]: 19 / 450,
+  [PLAYER_TEXTURES.jumpAir]: 80 / 1402,
   [PLAYER_TEXTURES.landing]: 24 / 350,
   [PLAYER_TEXTURES.dash]: 33 / 375,
   [PLAYER_ATTACK_TEXTURES[0]]: 10 / 542,
@@ -949,6 +950,7 @@ export class TrialScene extends Phaser.Scene {
       this.playerArt.setTexture(texture);
       if (motorcycleAnimationFrame) this.playerArt.setScale(MOTORCYCLE_RIDE_FRAME_SCALE);
       else if (ridingMotorcycle) this.playerArt.setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height);
+      else if (texture === PLAYER_TEXTURES.jumpAir) this.playerArt.setScale(PLAYER_JUMP_AIR_DISPLAY_HEIGHT / this.playerArt.height);
       else {
         const attackFrameIndex = PLAYER_ATTACK_TEXTURES.indexOf(texture as typeof PLAYER_ATTACK_TEXTURES[number]);
         const attackFrameHeight = PLAYER_ATTACK_FRAME_HEIGHTS[attackFrameIndex];
