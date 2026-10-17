@@ -333,3 +333,193 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   .pause-actions button { width: min(220px, 100%); }
   .pause-card > small { display: none; }
 }
+
+/* Reference-matched Basic GUI Bundle treatment. Ranking stays on its original skin. */
+.home-screen .gui-panel,
+.settings-screen .gui-panel,
+.result-screen .gui-panel,
+.pause-card.gui-panel {
+  border: 22px solid transparent;
+  border-image: url("/ui/basic-gui/BoxesBanners/Box_Rounded.png") 112 fill / 22px / 0 stretch;
+  background-color: #515d70;
+  background-image: none;
+  box-shadow: 0 16px 35px rgba(0, 0, 0, .38);
+}
+.home-screen .hero-copy { color: #fff; }
+.home-screen .hero-copy::after { opacity: .09; }
+.home-screen .hero .eyebrow,
+.settings-screen .eyebrow,
+.result-screen .eyebrow { color: #fff; font-weight: 900; text-shadow: 1px 1px #252c38; }
+.home-screen .hero .eyebrow { border: 2px solid #252a32; background: #69758a; color: #fff; }
+.home-screen .live-dot { background: #29c600; box-shadow: 0 0 0 2px #10141b, 0 0 8px #59ef35; }
+.home-screen .hero h1,
+.result-screen .result-card h1,
+.settings-screen .settings-card h1,
+.pause-card h1 {
+  color: #fff;
+  font-family: "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+  font-weight: 1000;
+  letter-spacing: -.045em;
+  text-shadow: 2px 3px 0 #1b2029, -1px -1px 0 #1b2029, 1px -1px 0 #1b2029, -1px 1px 0 #1b2029;
+}
+.home-screen .hero h1 em,
+.result-screen .result-card h1 em { color: #ff9d13; -webkit-text-stroke: 1px #1b2029; text-shadow: 2px 3px 0 #1b2029; }
+.home-screen .hero-copy > p,
+.settings-screen .form-note,
+.settings-screen .settings-note p,
+.result-screen .result-meta,
+.pause-card p { color: #f0f2f7; }
+.home-screen .wordmark { color: #fff; text-shadow: 1px 2px 0 #1b2029; }
+.home-screen .wordmark > span:last-child { color: #ff9d13; }
+.home-screen .wordmark-icon { border: 3px solid #141820; border-radius: 10px; background: #f57a00; box-shadow: inset 0 0 0 2px #ffbf52, 0 2px 0 #080b10; }
+.home-screen .settings-link {
+  width: min(208px, 42%);
+  min-height: 0;
+  aspect-ratio: 1159 / 358;
+  justify-content: center;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: url("/ui/basic-gui/ButtonsText/ButtonText_Large_GreyOutline_Round.png") center / 100% 100% no-repeat;
+  color: #fff;
+  font: 900 clamp(9px, 1vw, 12px)/1 "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+  letter-spacing: .025em;
+  text-shadow: 0 1px 1px #29303b;
+}
+.home-screen .settings-link img { width: 15px; height: 15px; }
+.home-screen .settings-link span { color: #fff; padding-left: 2px; }
+.home-screen .settings-link:hover { color: #fff; filter: brightness(1.12); }
+.home-screen .primary-button, .settings-screen .primary-button, .result-screen .primary-button, .pause-actions .primary-button {
+  background-image: url("/ui/basic-gui/ButtonsText/ButtonText_Large_Orange_Round.png");
+  color: #fff;
+  font-family: "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+  font-weight: 900;
+  font-size: clamp(12px, 1.15vw, 16px);
+  -webkit-text-stroke: .35px currentColor;
+  text-shadow: 0 2px 0 #813e05, 1px 1px 0 #813e05, -1px -1px 0 #813e05;
+}
+.home-screen .secondary-button, .result-screen .secondary-button, .pause-actions .secondary-button {
+  background-image: url("/ui/basic-gui/ButtonsText/ButtonText_Large_GreyOutline_Round.png");
+  color: #fff;
+  font-family: "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+  font-weight: 900;
+  font-size: clamp(12px, 1.15vw, 16px);
+  -webkit-text-stroke: .35px currentColor;
+  text-shadow: 0 2px 0 #202630, 1px 1px 0 #202630, -1px -1px 0 #202630;
+}
+.pause-actions .pause-exit {
+  background-image: url("/ui/basic-gui/ButtonsText/ButtonText_Large_Orange_Round.png");
+  color: #fff;
+  filter: hue-rotate(-25deg) saturate(1.35);
+}
+.home-screen .primary-button:hover, .home-screen .secondary-button:hover,
+.settings-screen .primary-button:hover, .result-screen .primary-button:hover,
+.result-screen .secondary-button:hover, .pause-actions button:hover { filter: brightness(1.12); }
+.home-screen .feature-strip > div {
+  border: 12px solid transparent;
+  border-image: url("/ui/basic-gui/BoxesBanners/Box_Rounded.png") 112 fill / 12px / 0 stretch;
+  background: #566276;
+  box-shadow: 0 7px 16px rgba(0,0,0,.25);
+}
+.home-screen .feature-strip span { color: #ffb321; text-shadow: 1px 1px #1b2029; }
+.home-screen .feature-strip strong { color: #fff; text-shadow: 1px 1px #1b2029; }
+.home-screen .feature-strip small { color: #e4e8ef; }
+.home-screen .home-footer { color: #bac6d7; }
+.home-screen .connection-state i { background: #29c600; box-shadow: 0 0 8px rgba(53, 224, 16, .55); }
+.settings-screen .gui-back-link {
+  min-width: 180px;
+  min-height: 0;
+  aspect-ratio: 1159 / 358;
+  justify-content: center;
+  padding: 0 11px;
+  background: url("/ui/basic-gui/ButtonsText/ButtonText_Large_GreyOutline_Round.png") center / 100% 100% no-repeat;
+  color: #fff;
+  font: 900 11px/1 "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+  letter-spacing: .025em;
+  text-shadow: 0 1px 1px #29303b;
+}
+.settings-screen .gui-back-link:hover { color: #fff; filter: brightness(1.12); }
+.settings-screen .settings-card h1 { color: #fff; font-size: clamp(32px, 5vw, 44px); }
+.settings-screen .nickname-form label,
+.settings-screen .audio-settings > label:first-child,
+.settings-screen .audio-settings .vibration-setting { color: #f2f4f8; }
+.settings-screen .nickname-form input {
+  height: 46px;
+  border: 0;
+  border-radius: 999px;
+  background: url("/ui/basic-gui/ButtonsText/ButtonText_Orange_TextInput.png") center / 100% 100% no-repeat;
+  color: #3c2d1f;
+  font-weight: 700;
+  padding-inline: 18px;
+}
+.settings-screen .nickname-form input::placeholder { color: #79552f; }
+.settings-screen .audio-settings,
+.settings-screen .settings-note { border-color: rgba(28, 35, 46, .45); }
+.settings-screen .audio-settings > label:first-child b { color: #fff; text-shadow: 1px 1px #252c38; }
+.settings-screen .audio-settings input[type="range"] {
+  height: 25px;
+  border: 0;
+  border-radius: 999px;
+  background: url("/ui/basic-gui/Sliders/SlimSlider_Orange_Frame.png") center / 100% 100% no-repeat;
+}
+.settings-screen .audio-settings input[type="range"]::-webkit-slider-thumb { background-image: url("/ui/basic-gui/Sliders/SlimSlider_Orange_Button.png"); }
+.settings-screen .audio-settings input[type="range"]::-moz-range-thumb { background-image: url("/ui/basic-gui/Sliders/SlimSlider_Orange_Button.png"); }
+.settings-screen .audio-settings .vibration-setting input { accent-color: #22bd00; }
+.settings-screen .settings-note strong { color: #ffb321; text-shadow: 1px 1px #202630; }
+.settings-screen .profile-notice { color: #e0ffd6; }
+.settings-screen .form-error { color: #ffe0e9; }
+.result-screen .result-card { text-align: center; }
+.result-screen .result-card h1 { font-size: clamp(48px, 8vw, 74px); }
+.result-screen .result-score { border-color: rgba(28, 35, 46, .45); }
+.result-screen .result-score span { color: #252c38; font-weight: 900; }
+.result-screen .result-score strong { color: #fff; text-shadow: 2px 2px #242b36; }
+.result-screen .result-meta b { color: #fff; text-shadow: 1px 1px #252c38; }
+.result-screen .pending-banner { border: 2px solid #262c36; border-radius: 10px; background: rgba(255, 179, 49, .22); color: #fff4d6; }
+.result-screen .pending-banner.confirmed { background: rgba(33, 187, 0, .22); color: #f1ffe8; }
+.result-screen .pending-banner.rejected { background: rgba(231, 18, 74, .2); color: #fff0f4; }
+.result-screen .result-actions .text-button { color: #fff; font-weight: 800; text-shadow: 1px 1px #252c38; }
+.game-frame { border: 3px solid #161b24; border-radius: 18px; box-shadow: 0 0 0 2px rgba(223, 229, 238, .55), 0 0 30px rgba(30, 10, 43, .35); }
+.game-topbar {
+  border: 10px solid transparent;
+  border-image: url("/ui/basic-gui/BoxesBanners/Box_Rounded.png") 112 fill / 10px / 0 stretch;
+  background: #515d70;
+  box-shadow: 0 4px 13px rgba(0, 0, 0, .35);
+}
+.hud-icon-button { background-image: url("/ui/basic-gui/ButtonsIcons/IconButton_Small_GreyOutline_Rounded.png"); }
+.hud-stat > span { color: #e5e9f0; text-shadow: 1px 1px #252c38; }
+.hud-stat strong { color: #fff; text-shadow: 1px 2px #252c38; }
+.lives-hud {
+  border-color: #161b24;
+  background: #657185;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 2px 0 rgba(0,0,0,.35);
+}
+.life-heart-img.lost { opacity: .8; filter: grayscale(.5); }
+.game-hint { border-top: 2px solid #1b2029; background: rgba(75, 87, 106, .94); color: #fff; text-shadow: 1px 1px #252c38; }
+.pause-card { width: min(430px, 100%); padding: clamp(22px, 3.4vw, 34px); }
+.pause-card .gui-kicker { color: #222a35; font-weight: 900; }
+.pause-card h1 {
+  display: grid;
+  width: min(245px, 90%);
+  min-height: 66px;
+  place-items: center;
+  margin: 2px auto 15px;
+  background: url("/ui/basic-gui/BoxesBanners/Banner_Grey.png") center / 100% 100% no-repeat;
+  color: #fff;
+  font-size: clamp(26px, 4vw, 34px);
+  letter-spacing: .015em;
+  text-shadow: 1px 2px #202630;
+}
+.pause-card p { color: #f1f3f7; font-weight: 600; }
+.pause-actions { gap: 2px; }
+.pause-card > small { color: #28303d; font-weight: 800; }
+.pause-overlay { background: rgba(22, 15, 33, .76); }
+.play-screen { background: radial-gradient(ellipse at 50% 40%, #352248, #14121e 72%); }
+
+@media (max-width: 650px) {
+  .home-screen .settings-link { width: min(164px, 48%); font-size: 8px; }
+  .settings-screen .gui-back-link { min-width: 156px; font-size: 8px; }
+  .home-screen .gui-panel, .settings-screen .gui-panel, .result-screen .gui-panel, .pause-card.gui-panel { border-width: 16px; border-image-width: 16px; }
+  .home-screen .feature-strip > div { border-width: 10px; border-image-width: 10px; }
+  .game-topbar { border-width: 7px; border-image-width: 7px; }
+  .pause-card h1 { min-height: 54px; }
+}
