@@ -136,7 +136,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 
 /* Compact PlayStation-style action cluster. */
 .touch-actions {
-  --action-size: clamp(52px, 5vw, 64px);
+  --action-size: clamp(60px, 5.8vw, 72px);
   position: relative;
   display: block;
   flex: 0 0 auto;
@@ -157,10 +157,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 .touch-actions .touch-button:active,
 .touch-actions .touch-button:focus-visible { opacity: 1; }
 @media (max-height: 360px) and (orientation: landscape) {
-  .touch-actions { --action-size: 48px; }
+  .touch-actions { --action-size: 56px; }
 }
 @media (max-height: 280px) and (orientation: landscape) {
-  .touch-actions { --action-size: 42px; }
+  .touch-actions { --action-size: 48px; }
 }
 
 /* Basic GUI Bundle skin for the home, settings, result, and gameplay screens.
