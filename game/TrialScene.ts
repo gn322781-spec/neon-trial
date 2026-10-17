@@ -2,7 +2,7 @@ import * as Phaser from "phaser";
 import { AudioFeedback } from "@/game/audio";
 import { Controls } from "@/game/controls";
 import { PHYSICS, jumpVelocityAfterRelease } from "@/game/physics";
-import { awardScore, createScoreState, GAME_VERSION, MONSTER_DAMAGE, PLAYER_MAX_HEALTH, STARTING_LIVES, SURVIVAL_SCORE_PER_SECOND, type ScoreEvent, type ScoreState } from "@/game/rules";
+import { awardScore, createScoreState, GAME_VERSION, PLAYER_DAMAGE_PER_HIT, PLAYER_MAX_HEALTH, STARTING_LIVES, SURVIVAL_SCORE_PER_SECOND, type ScoreEvent, type ScoreState } from "@/game/rules";
 import { ZONES, type EnemyKind, type EnemySpec } from "@/game/zones";
 
 export type TrialHud = { score: number; zone: number; deaths: number; lives: number; health: number; maxHealth: number; distance: number; dashReady: boolean; checkpoint: number };
@@ -989,7 +989,7 @@ export class TrialScene extends Phaser.Scene {
         .setOrigin(anchor.x, anchor.y);
       const smokeActive = hazard.visual.alpha > 0.25;
       if (smokeActive && time > this.invulnerableUntil && this.rectanglesOverlap(this.player, hazard.shape)) {
-        this.die();
+        this.takeDamage(time);
         return;
       }
     }
@@ -1100,7 +1100,7 @@ export class TrialScene extends Phaser.Scene {
       if (Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), projectile.sprite.getBounds())) {
         projectile.sprite.destroy();
         this.enemyProjectiles.splice(index, 1);
-        this.takeMonsterDamage(time);
+        this.takeDamage(time);
         return;
       }
     }
@@ -1187,9 +1187,9 @@ export class TrialScene extends Phaser.Scene {
     ownerSegment?.objects.push(glow);
   }
 
-  private takeMonsterDamage(time: number) {
+  private takeDamage(time: number) {
     if (this.respawning || this.finished || time < this.invulnerableUntil) return;
-    this.health = Math.max(0, this.health - MONSTER_DAMAGE);
+    this.health = Math.max(0, this.health - PLAYER_DAMAGE_PER_HIT);
     this.damageFlashUntil = time + 750;
     this.playerArt.setTint(0xff4444);
     this.playEffect("fx-player-impact", this.player.x, this.player.y, 68);
