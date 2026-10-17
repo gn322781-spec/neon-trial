@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { Controls } from "@/game/controls";
 import { AudioFeedback } from "@/game/audio";
-import { GAME_VERSION } from "@/game/rules";
+import { GAME_VERSION, PLAYER_MAX_HEALTH } from "@/game/rules";
 import type { TrialHud, TrialResult } from "@/game/TrialScene";
 import { GameCanvas } from "@/components/GameCanvas";
 import { getNickname, saveNickname as persistNickname, subscribeNickname } from "@/lib/identity/local-nickname";
@@ -11,7 +11,7 @@ import { ApiError, claimRemoteNickname, createRemoteAttempt, fetchRanking, forge
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
 type Screen = "home" | "game" | "ranking" | "settings" | "result";
-const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, lives: 4, distance: 0, dashReady: true, checkpoint: 0 };
+const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, lives: 4, health: PLAYER_MAX_HEALTH, maxHealth: PLAYER_MAX_HEALTH, distance: 0, dashReady: true, checkpoint: 0 };
 type RankRow = { position: number; nickname: string; best_score: number };
 const RANKING_NAME_LAYERS = ["Layer_43", "Layer_39", "Layer_35", "Layer_32", "Layer_29", "Layer_26", "Layer_23"];
 const RANKING_SCORE_LAYERS = ["Layer_42", "Layer_38", "Layer_34", "Layer_31", "Layer_28", "Layer_25", "Layer_22"];
@@ -275,6 +275,12 @@ export function GameShell() {
             <div className="hud-player">
               <div className="lives-hud" role="img" aria-label={`Vidas restantes: ${hud.lives} de 4`} title={`Vidas: ${hud.lives} de 4`}>
                 {Array.from({ length: 4 }, (_, index) => <img key={index} className={`life-heart-img ${index < hud.lives ? "active" : "lost"}`} src={`/ui/basic-gui/Icons/Icon_Large_Heart${index < hud.lives ? "Full" : "Empty"}.png`} alt="" aria-hidden="true" draggable={false} />)}
+              </div>
+              <div className="health-hud">
+                <div className="health-caption"><span>VIDA</span><strong>{hud.health}/{hud.maxHealth}</strong></div>
+                <div className={`health-bar${hud.health <= hud.maxHealth / 4 ? " low" : ""}`} role="progressbar" aria-label="Vida do personagem" aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
+                  <span className="health-bar-fill" style={{ transform: `scaleX(${hud.health / hud.maxHealth})` }} />
+                </div>
               </div>
               <div className="hud-stat score-hud"><span><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Star.png" alt="" draggable={false} />PONTOS</span><strong>{hud.score.toLocaleString("pt-BR")}</strong></div>
               <div className="hud-progress">

@@ -2,10 +2,10 @@ import * as Phaser from "phaser";
 import { AudioFeedback } from "@/game/audio";
 import { Controls } from "@/game/controls";
 import { PHYSICS, jumpVelocityAfterRelease } from "@/game/physics";
-import { awardScore, createScoreState, GAME_VERSION, STARTING_LIVES, SURVIVAL_SCORE_PER_SECOND, type ScoreEvent, type ScoreState } from "@/game/rules";
+import { awardScore, createScoreState, GAME_VERSION, MONSTER_DAMAGE, PLAYER_MAX_HEALTH, STARTING_LIVES, SURVIVAL_SCORE_PER_SECOND, type ScoreEvent, type ScoreState } from "@/game/rules";
 import { ZONES, type EnemyKind, type EnemySpec } from "@/game/zones";
 
-export type TrialHud = { score: number; zone: number; deaths: number; lives: number; distance: number; dashReady: boolean; checkpoint: number };
+export type TrialHud = { score: number; zone: number; deaths: number; lives: number; health: number; maxHealth: number; distance: number; dashReady: boolean; checkpoint: number };
 export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: number };
 export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameVersion: string; events: AttemptEvent[]; zonesCompleted: number };
 
@@ -235,6 +235,7 @@ export class TrialScene extends Phaser.Scene {
   private lastEndlessIslandVariant = -1;
   private worldEndX = WORLD_WIDTH;
   private deaths = 0;
+  private health = PLAYER_MAX_HEALTH;
   private coyoteUntil = 0;
   private jumpBufferUntil = 0;
   private dashUntil = 0;
@@ -1093,12 +1094,10 @@ export class TrialScene extends Phaser.Scene {
         this.enemyProjectiles.splice(index, 1);
         continue;
       }
-      if (time >= this.invulnerableUntil
-        && Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), projectile.sprite.getBounds())) {
+      if (Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), projectile.sprite.getBounds())) {
         projectile.sprite.destroy();
         this.enemyProjectiles.splice(index, 1);
-        this.playEffect("fx-player-impact", this.player.x, this.player.y, 68);
-        this.die();
+        this.takeMonsterDamage(time);
         return;
       }
     }
@@ -1185,11 +1184,26 @@ export class TrialScene extends Phaser.Scene {
     ownerSegment?.objects.push(glow);
   }
 
+  private takeMonsterDamage(time: number) {
+    if (this.respawning || this.finished || time < this.invulnerableUntil) return;
+    this.health = Math.max(0, this.health - MONSTER_DAMAGE);
+    this.playEffect("fx-player-impact", this.player.x, this.player.y, 68);
+    if (this.health === 0) {
+      this.die();
+      return;
+    }
+    this.invulnerableUntil = time + 750;
+    this.audio.play("hit");
+    this.audio.haptic(45);
+    this.emitHud();
+  }
+
   private die() {
-    if (this.respawning || this.finished || performance.now() < this.invulnerableUntil) return;
+    if (this.respawning || this.finished) return;
     for (const projectile of this.enemyProjectiles) projectile.sprite.destroy();
     this.enemyProjectiles.length = 0;
     this.respawning = true;
+    this.health = 0;
     this.playEffect("fx-dash-smoke", this.player.x, this.player.y, 66, 58);
     this.endMotorcycleRide();
     this.deaths += 1;
@@ -1220,6 +1234,7 @@ export class TrialScene extends Phaser.Scene {
       this.playerArt.setTexture(PLAYER_TEXTURES.idle);
       this.positionPlayerArt();
       this.playerArt.setAlpha(1);
+      this.health = PLAYER_MAX_HEALTH;
       this.invulnerableUntil = this.time.now + 1_050;
       this.nextDashAt = this.time.now;
       this.respawning = false;
@@ -1245,6 +1260,8 @@ export class TrialScene extends Phaser.Scene {
       zone: Math.floor(distance / SEGMENT_LENGTH) + 1,
       deaths: this.deaths,
       lives: Math.max(0, STARTING_LIVES - this.deaths),
+      health: this.health,
+      maxHealth: PLAYER_MAX_HEALTH,
       distance,
       dashReady: this.time.now >= this.nextDashAt,
       checkpoint: this.checkpointCount,
@@ -1256,5 +1273,3 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
-
-

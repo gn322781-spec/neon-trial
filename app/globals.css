@@ -543,6 +543,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 .game-hud .lives-hud { min-height: 0; gap: 4px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .game-hud .life-heart-img { width: clamp(22px, 2.4vw, 30px); filter: drop-shadow(0 2px 2px rgba(12, 7, 20, .7)); }
 .game-hud .life-heart-img.lost { opacity: .75; filter: grayscale(.5) drop-shadow(0 2px 2px rgba(12, 7, 20, .7)); }
+.health-hud { width: clamp(128px, 14vw, 168px); }
+.health-caption { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+.health-caption strong { font-variant-numeric: tabular-nums; }
+.health-bar { height: 18px; overflow: hidden; padding: 3px; border: 2px solid #171b24; border-radius: 999px; background: #303846; box-shadow: inset 0 0 0 1px #afb9ca, 0 2px 3px rgba(12, 7, 20, .55); }
+.health-bar-fill { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(#a0ec69, #39ba3b); box-shadow: inset 0 1px rgba(255, 255, 255, .6); transform-origin: left center; transition: transform 180ms ease, background 180ms ease; }
+.health-bar.low .health-bar-fill { background: linear-gradient(#ff9981, #ed3654); }
+@media (max-width: 900px), (max-height: 510px) {
+  .health-hud { width: 128px; }
+  .health-caption { margin-bottom: 3px; font-size: 8px; }
+  .health-bar { height: 15px; padding: 2px; }
+}
+@media (max-width: 600px), (max-height: 360px) {
+  .health-hud { width: 112px; }
+  .health-caption { font-size: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .health-bar-fill { transition: none; }
+}
 .game-hud .hud-stat { min-width: 0; gap: 3px; }
 .game-hud .hud-stat > span { gap: 4px; color: #f7efff; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-shadow: inherit; }
 .game-hud .hud-stat > span img { width: 15px; height: 15px; filter: drop-shadow(0 1px 1px #191320); }
