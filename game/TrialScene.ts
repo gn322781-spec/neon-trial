@@ -128,7 +128,10 @@ const HAZARD_SMOKE_ORB_ANIMATION = "hazard-smoke-orb";
 const CHECKPOINT_ALTAR_TEXTURE = "checkpoint-altar";
 const CHECKPOINT_ALTAR_ANIMATION = "checkpoint-altar-idle";
 const CHECKPOINT_ALTAR_FRAME_SIZE = { frameWidth: 654, frameHeight: 600 };
-const CHECKPOINT_ALTAR_DISPLAY_SIZE = { width: 132, height: 121 };
+const CHECKPOINT_ALTAR_DISPLAY_SIZE = { width: 88, height: 81 };
+const CHECKPOINT_ALTAR_BASELINE = 0.883;
+const CHECKPOINT_GLOW_ANIMATION = "checkpoint-glow-loop";
+const CHECKPOINT_GLOW_DISPLAY_SIZE = { width: 88, height: 59 };
 // Visible center and bottom of the six smoke orb frames in the 512px cells.
 const HAZARD_SMOKE_ORB_FRAME_ANCHORS = [
   { x: 271.5 / 512, y: 458 / 512 },
@@ -431,6 +434,14 @@ export class TrialScene extends Phaser.Scene {
         repeat: 0,
       });
     }
+    if (!this.anims.exists(CHECKPOINT_GLOW_ANIMATION)) {
+      this.anims.create({
+        key: CHECKPOINT_GLOW_ANIMATION,
+        frames: this.anims.generateFrameNumbers("fx-checkpoint-glow", { start: 0, end: 3 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
     if (!this.anims.exists(HAZARD_SMOKE_ORB_ANIMATION)) {
       this.anims.create({
         key: HAZARD_SMOKE_ORB_ANIMATION,
@@ -597,7 +608,7 @@ export class TrialScene extends Phaser.Scene {
   private addCheckpoint(x: number, surfaceY: number, objects?: Phaser.GameObjects.GameObject[]) {
     const altar = this.add.sprite(x, surfaceY, CHECKPOINT_ALTAR_TEXTURE)
       .setDisplaySize(CHECKPOINT_ALTAR_DISPLAY_SIZE.width, CHECKPOINT_ALTAR_DISPLAY_SIZE.height)
-      .setOrigin(0.5, 0.88)
+      .setOrigin(0.5, CHECKPOINT_ALTAR_BASELINE)
       .setDepth(2)
       .play(CHECKPOINT_ALTAR_ANIMATION);
     this.checkpointAltars.push(altar);
@@ -1127,17 +1138,22 @@ export class TrialScene extends Phaser.Scene {
 
   private activateCheckpoint(altar?: Phaser.GameObjects.Sprite) {
     if (!altar?.active) return;
-    this.playEffect("fx-checkpoint-glow", altar.x, altar.y - CHECKPOINT_ALTAR_DISPLAY_SIZE.height * 0.38, 168, 112);
-    this.tweens.add({
-      targets: altar,
-      alpha: { from: 1, to: 0.55 },
-      duration: 120,
-      yoyo: true,
-      repeat: 1,
-      ease: "Sine.inOut",
-    });
-  }
+    if (altar.getData("checkpointGlow")) return;
 
+    const glow = this.add.sprite(
+      altar.x,
+      altar.y - CHECKPOINT_ALTAR_DISPLAY_SIZE.height * 0.44,
+      "fx-checkpoint-glow",
+    )
+      .setDisplaySize(CHECKPOINT_GLOW_DISPLAY_SIZE.width, CHECKPOINT_GLOW_DISPLAY_SIZE.height)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(1)
+      .setAlpha(0.9)
+      .play(CHECKPOINT_GLOW_ANIMATION);
+    altar.setData("checkpointGlow", glow);
+    const ownerSegment = this.generatedSegments.find((segment) => segment.checkpoint === altar);
+    ownerSegment?.objects.push(glow);
+  }
   private die() {
     if (this.respawning || this.finished || performance.now() < this.invulnerableUntil) return;
     for (const projectile of this.enemyProjectiles) projectile.sprite.destroy();
