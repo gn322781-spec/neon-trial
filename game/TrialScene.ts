@@ -499,7 +499,7 @@ export class TrialScene extends Phaser.Scene {
       stateUntil: 0,
       impactAt: 0,
       attackHit: false,
-      nextAttackAt: this.time.now + 900 + ENEMY_KINDS.indexOf(spec.kind) * 250,
+      nextAttackAt: this.time.now + 900,
       health: 2,
     };
     this.enemies.push(enemy);
@@ -1029,25 +1029,25 @@ export class TrialScene extends Phaser.Scene {
       }
 
       const aggro = distance < 560 && Math.abs(dy) < 240;
-      let moving = false;
       const targetX = aggro
         ? Phaser.Math.Clamp(this.player.x - Math.sign(dx || enemy.direction) * 76, enemy.minX, enemy.maxX)
         : enemy.homeX;
-      const horizontalStep = targetX - enemy.sprite.x;
       const previousX = enemy.sprite.x;
+      const horizontalStep = targetX - previousX;
       if (Math.abs(horizontalStep) > 2) {
         enemy.direction = Math.sign(horizontalStep);
         enemy.sprite.x += enemy.direction * Math.min(Math.abs(horizontalStep), ENEMY_MOVE_SPEED[enemy.kind] * step);
       } else if (aggro) {
         enemy.direction = dx < 0 ? -1 : 1;
       }
+
       const targetY = aggro
         ? Phaser.Math.Clamp(this.player.y - 52, 90, VIEW_HEIGHT - 90)
         : enemy.baseY + Math.sin(time / 720 + enemy.homeX) * 12;
       const previousY = enemy.sprite.y;
       enemy.sprite.y = Phaser.Math.Linear(enemy.sprite.y, targetY, Math.min(1, step * 2.8));
       enemy.hitbox.setPosition(enemy.sprite.x, enemy.sprite.y);
-      moving = Math.abs(enemy.sprite.x - previousX) > 0.1 || Math.abs(enemy.sprite.y - previousY) > 0.1;
+      const moving = Math.abs(enemy.sprite.x - previousX) > 0.1 || Math.abs(enemy.sprite.y - previousY) > 0.1;
 
       enemy.sprite.setFlipX(enemy.direction > 0);
       if (aggro && canReachPlayer && time >= enemy.nextAttackAt) {
@@ -1256,3 +1256,5 @@ export class TrialScene extends Phaser.Scene {
     this.onHud(this.hud());
   }
 }
+
+
