@@ -19,6 +19,8 @@ export class AudioFeedback {
   private context: AudioContext | null = null;
   private deathAudio: HTMLAudioElement | null = null;
   private motorcycleAudio: HTMLAudioElement | null = null;
+  private readonly roosterAudios: HTMLAudioElement[] = [];
+  private roosterAudioIndex = 0;
   private currentVolume = 0.65;
   private vibrationOn = false;
 
@@ -38,6 +40,7 @@ export class AudioFeedback {
     this.currentVolume = Math.max(0, Math.min(1, value));
     if (this.deathAudio) this.deathAudio.volume = this.currentVolume;
     if (this.motorcycleAudio) this.motorcycleAudio.volume = this.currentVolume;
+    for (const audio of this.roosterAudios) audio.volume = this.currentVolume;
     if (typeof window !== "undefined") window.localStorage.setItem("neon-trial-volume", String(this.currentVolume));
   }
 
@@ -49,6 +52,7 @@ export class AudioFeedback {
   async unlock() {
     if (typeof window === "undefined") return;
     this.ensureDeathAudio();
+    this.ensureRoosterAudio();
     const Context = window.AudioContext;
     if (!Context) return;
     this.context ??= new Context();
@@ -56,6 +60,19 @@ export class AudioFeedback {
   }
 
   play(cue: SoundCue) {
+    if (cue === "rooster") {
+      const audio = this.ensureRoosterAudio();
+      if (audio && this.currentVolume > 0) {
+        audio.volume = this.currentVolume;
+        try {
+          audio.currentTime = 0;
+          void audio.play().catch(() => this.playTone("rooster"));
+        } catch {
+          this.playTone("rooster");
+        }
+        return;
+      }
+    }
     if (cue === "motorcycle") {
       const audio = this.ensureMotorcycleAudio();
       if (audio && this.currentVolume > 0) {
@@ -107,6 +124,21 @@ export class AudioFeedback {
     audio.load();
     this.motorcycleAudio = audio;
     return audio;
+  }
+
+  private ensureRoosterAudio() {
+    if (typeof window === "undefined") return null;
+    if (this.roosterAudios.length === 0) {
+      for (let index = 0; index < 3; index += 1) {
+        const audio = new window.Audio("/sounds/rooster-throw.mp3");
+        audio.preload = "auto";
+        audio.load();
+        this.roosterAudios.push(audio);
+      }
+    }
+    // Allow consecutive throws to play without cutting off the previous call.
+    return this.roosterAudios.find((audio) => audio.paused || audio.ended)
+      ?? this.roosterAudios[this.roosterAudioIndex++ % this.roosterAudios.length];
   }
 
   private playTone(cue: SoundCue) {
