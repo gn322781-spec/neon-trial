@@ -1,10 +1,11 @@
-export type SoundCue = "jump" | "dash" | "attack" | "shoot" | "crystal" | "motorcycle" | "hit" | "death" | "checkpoint" | "zone" | "complete";
+export type SoundCue = "jump" | "dash" | "attack" | "shoot" | "rooster" | "crystal" | "motorcycle" | "hit" | "death" | "checkpoint" | "zone" | "complete";
 
 const CUES: Record<SoundCue, { frequency: number; duration: number; wave: OscillatorType; volume: number }> = {
   jump: { frequency: 430, duration: 0.085, wave: "square", volume: 0.055 },
   dash: { frequency: 185, duration: 0.14, wave: "sawtooth", volume: 0.065 },
   attack: { frequency: 275, duration: 0.065, wave: "triangle", volume: 0.05 },
   shoot: { frequency: 680, duration: 0.075, wave: "sawtooth", volume: 0.055 },
+  rooster: { frequency: 820, duration: 0.12, wave: "triangle", volume: 0.055 },
   crystal: { frequency: 760, duration: 0.11, wave: "sine", volume: 0.07 },
   motorcycle: { frequency: 220, duration: 0.24, wave: "sawtooth", volume: 0.07 },
   hit: { frequency: 165, duration: 0.14, wave: "square", volume: 0.06 },
