@@ -5,7 +5,7 @@ import { PHYSICS, jumpVelocityAfterRelease } from "@/game/physics";
 import { awardScore, createScoreState, GAME_VERSION, PLAYER_DAMAGE_PER_HIT, PLAYER_MAX_HEALTH, STARTING_LIVES, SURVIVAL_SCORE_PER_SECOND, type ScoreEvent, type ScoreState } from "@/game/rules";
 import { ZONES, type EnemyKind, type EnemySpec } from "@/game/zones";
 
-export type TrialHud = { score: number; zone: number; deaths: number; lives: number; health: number; maxHealth: number; distance: number; dashReady: boolean; checkpoint: number };
+export type TrialHud = { score: number; zone: number; deaths: number; lives: number; health: number; maxHealth: number; distance: number; dashReady: boolean; roosterReady: boolean; checkpoint: number };
 export type AttemptEvent = { event: ScoreEvent; key: string; at_ms: number; x: number };
 export type TrialResult = TrialHud & { completed: true; elapsedMs: number; gameVersion: string; events: AttemptEvent[]; zonesCompleted: number };
 
@@ -13,7 +13,7 @@ type MobileSnapshot = ReturnType<Controls["snapshot"]>;
 type DamageHazard = { shape: Phaser.GameObjects.Rectangle; visual: Phaser.GameObjects.Sprite };
 type EnemyState = "hover" | "approach" | "attack" | "hit" | "dying";
 type EnemyProjectile = { sprite: Phaser.GameObjects.Image; velocityX: number; velocityY: number; expiresAt: number };
-type MotorcycleProjectile = { sprite: Phaser.GameObjects.Image; direction: number; expiresAt: number };
+type PlayerProjectile = { sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite; direction: number; speed: number; hitWidth: number; hitHeight: number; expiresAt: number };
 type EnemyUnit = {
   id: string;
   kind: EnemyKind;
@@ -51,6 +51,7 @@ type Keys = {
   dash: Phaser.Input.Keyboard.Key; attack: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key;
   d: Phaser.Input.Keyboard.Key; w: Phaser.Input.Keyboard.Key; z: Phaser.Input.Keyboard.Key;
   up: Phaser.Input.Keyboard.Key; down: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; c: Phaser.Input.Keyboard.Key;
+  rooster: Phaser.Input.Keyboard.Key;
 };
 
 const WORLD_WIDTH = 4_200;
@@ -61,6 +62,10 @@ const VIEW_HEIGHT = 540;
 const PLAYER_ART_SCALE = 0.22;
 const PLAYER_ART_HEIGHT = 510 * PLAYER_ART_SCALE;
 const PLAYER_JUMP_AIR_DISPLAY_HEIGHT = 450 * PLAYER_ART_SCALE;
+// Normalize the throw pose against the idle character's visible height and foot center.
+const PLAYER_THROW_ART_SCALE = 469 * PLAYER_ART_SCALE / 837;
+const PLAYER_THROW_PIVOT_X = 514.5 / 1536;
+const PLAYER_THROW_DURATION_MS = 260;
 const PLAYER_ATTACK_DURATION_MS = 180;
 const PLAYER_BODY_WIDTH = 40;
 const PLAYER_BODY_HEIGHT = 66;
@@ -102,6 +107,7 @@ const PLAYER_TEXTURES = {
   jumpAir: "player-jump-air",
   landing: "player-landing",
   dash: "player-dash",
+  roosterThrow: "player-rooster-throw",
 } as const;
 const PLAYER_ATTACK_TEXTURES = [
   "player-punch-01",
@@ -118,6 +124,7 @@ const PLAYER_TEXTURE_BOTTOM_MARGIN: Record<string, number> = {
   [PLAYER_TEXTURES.jumpAir]: 80 / 1402,
   [PLAYER_TEXTURES.landing]: 24 / 350,
   [PLAYER_TEXTURES.dash]: 33 / 375,
+  [PLAYER_TEXTURES.roosterThrow]: 50 / 1024,
   [PLAYER_ATTACK_TEXTURES[0]]: 10 / 542,
   [PLAYER_ATTACK_TEXTURES[1]]: 8 / 621,
   [PLAYER_ATTACK_TEXTURES[2]]: 80 / 1649,
@@ -179,6 +186,11 @@ const MOTORCYCLE_SPEED_MULTIPLIER = 1.45;
 const MOTORCYCLE_PROJECTILE_TEXTURE = "motorcycle-energy-shot";
 const MOTORCYCLE_PROJECTILE_SPEED = 760;
 const MOTORCYCLE_PROJECTILE_DURATION = 1_400;
+const ROOSTER_SHEET = "player-rooster-sheet";
+const ROOSTER_ANIMATION = "player-rooster-flight";
+const ROOSTER_SPEED = 620;
+const ROOSTER_DURATION_MS = 1_500;
+const ROOSTER_COOLDOWN_MS = 650;
 const ENEMY_FRAME_WIDTH = 81;
 const ENEMY_FRAME_HEIGHT = 71;
 const ENEMY_TARGET_VISIBLE_HEIGHT = 82;
@@ -220,7 +232,7 @@ export class TrialScene extends Phaser.Scene {
   private readonly generatedSegments: GeneratedSegment[] = [];
   private readonly enemies: EnemyUnit[] = [];
   private readonly enemyProjectiles: EnemyProjectile[] = [];
-  private readonly motorcycleProjectiles: MotorcycleProjectile[] = [];
+  private readonly playerProjectiles: PlayerProjectile[] = [];
   private readonly checkpointAltars: Phaser.GameObjects.Sprite[] = [];
   private readonly score: ScoreState = createScoreState();
   private readonly scoreEvents: AttemptEvent[] = [];
@@ -231,7 +243,7 @@ export class TrialScene extends Phaser.Scene {
   private motorcycleMountUntil = 0;
   private motorcycleAnimationStartedAt = 0;
   private motorcycleWasMoving = false;
-  private previous: MobileSnapshot = { left: false, right: false, jump: false, dash: false, attack: false };
+  private previous: MobileSnapshot = { left: false, right: false, jump: false, dash: false, attack: false, rooster: false };
   private runStartedAt = 0;
   private checkpointX = 75;
   private checkpointY = PLAYER_START_Y;
@@ -247,6 +259,8 @@ export class TrialScene extends Phaser.Scene {
   private airJumpAvailable = true;
   private dashUntil = 0;
   private nextDashAt = 0;
+  private nextRoosterAt = 0;
+  private throwUntil = 0;
   private invulnerableUntil = 0;
   private damageFlashUntil = 0;
   private facing = 1;
@@ -296,6 +310,8 @@ export class TrialScene extends Phaser.Scene {
     this.load.image(PLAYER_TEXTURES.jumpAir, "/character/06_pulo_no_ar.png?v=2");
     this.load.image(PLAYER_TEXTURES.landing, "/character/07_aterrissagem.png");
     this.load.image(PLAYER_TEXTURES.dash, "/character/08_dash_ataque.png");
+    this.load.image(PLAYER_TEXTURES.roosterThrow, "/character/rooster-throw.png");
+    this.load.spritesheet(ROOSTER_SHEET, "/projectiles/rooster-flight.png", { frameWidth: 512, frameHeight: 512 });
     PLAYER_ATTACK_TEXTURES.forEach((key, index) => {
       this.load.image(key, `/character/attacks/punch-${String(index + 1).padStart(2, "0")}.png`);
     });
@@ -319,7 +335,7 @@ export class TrialScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-      this.clearMotorcycleProjectiles();
+      this.clearPlayerProjectiles();
     });
     this.drawBackdrop();
     this.addFloatingSetPiece(620, 52, 210, ISLAND_SET_PIECES[0]);
@@ -416,6 +432,7 @@ export class TrialScene extends Phaser.Scene {
 
     this.keys = this.input.keyboard!.addKeys({
       left: "LEFT", right: "RIGHT", jump: "SPACE", dash: "SHIFT", attack: "X",
+      rooster: "E",
       a: "A", d: "D", w: "W", z: "Z", up: "UP", down: "DOWN", s: "S", c: "C",
     }) as Keys;
     this.runStartedAt = performance.now();
@@ -440,6 +457,9 @@ export class TrialScene extends Phaser.Scene {
   }
 
   private createEffectAnimations() {
+    if (!this.anims.exists(ROOSTER_ANIMATION)) {
+      this.anims.create({ key: ROOSTER_ANIMATION, frames: this.anims.generateFrameNumbers(ROOSTER_SHEET, { start: 0, end: 5 }), frameRate: 12, repeat: -1 });
+    }
     if (!this.anims.exists(CHECKPOINT_ALTAR_ANIMATION)) {
       this.anims.create({
         key: CHECKPOINT_ALTAR_ANIMATION,
@@ -845,6 +865,7 @@ export class TrialScene extends Phaser.Scene {
       jump: mobile.jump || keyboard.jump.isDown || keyboard.w.isDown || keyboard.z.isDown || keyboard.up.isDown,
       dash: mobile.dash || keyboard.dash.isDown || keyboard.c.isDown,
       attack: mobile.attack || keyboard.attack.isDown,
+      rooster: mobile.rooster || keyboard.rooster.isDown,
       down: keyboard.down.isDown || keyboard.s.isDown,
     };
     const justPressed = (action: keyof MobileSnapshot) => input[action] && !this.previous[action];
@@ -904,6 +925,7 @@ export class TrialScene extends Phaser.Scene {
     }
 
     if (justPressed("attack")) this.startAttack(time);
+    if (justPressed("rooster")) this.startRoosterThrow(time);
     this.updateHazards(time);
     if (this.respawning || this.finished) {
       this.previous = input;
@@ -914,7 +936,7 @@ export class TrialScene extends Phaser.Scene {
       this.previous = input;
       return;
     }
-    this.updateMotorcycleProjectiles(time, delta);
+    this.updatePlayerProjectiles(time, delta);
     this.updateProgress();
     if (this.player.y > VIEW_HEIGHT + 60) {
       this.die();
@@ -949,7 +971,8 @@ export class TrialScene extends Phaser.Scene {
     } else if (ridingMotorcycle) {
       this.motorcycleWasMoving = false;
       texture = MOTORCYCLE_RIDING_TEXTURE;
-    } else if (time < this.dashUntil) texture = PLAYER_TEXTURES.dash;
+    } else if (time < this.throwUntil) texture = PLAYER_TEXTURES.roosterThrow;
+    else if (time < this.dashUntil) texture = PLAYER_TEXTURES.dash;
     else if (time < this.attackUntil) {
       texture = PLAYER_ATTACK_TEXTURES[this.attackFrameIndex];
     } else if (grounded && crouching) texture = PLAYER_TEXTURES.crouch;
@@ -961,6 +984,7 @@ export class TrialScene extends Phaser.Scene {
     // Reapply the pose size so respawning cannot leave another frame's scale behind.
     if (motorcycleAnimationFrame) this.playerArt.setScale(MOTORCYCLE_RIDE_FRAME_SCALE);
     else if (ridingMotorcycle) this.playerArt.setDisplaySize(MOTORCYCLE_RIDE_SIZE.width, MOTORCYCLE_RIDE_SIZE.height);
+    else if (texture === PLAYER_TEXTURES.roosterThrow) this.playerArt.setScale(PLAYER_THROW_ART_SCALE);
     else if (texture === PLAYER_TEXTURES.jumpAir) {
       const aspectRatio = this.playerArt.frame.realWidth / this.playerArt.frame.realHeight;
       this.playerArt.setDisplaySize(PLAYER_JUMP_AIR_DISPLAY_HEIGHT * aspectRatio, PLAYER_JUMP_AIR_DISPLAY_HEIGHT);
@@ -969,6 +993,7 @@ export class TrialScene extends Phaser.Scene {
       const attackFrameHeight = PLAYER_ATTACK_FRAME_HEIGHTS[attackFrameIndex];
       this.playerArt.setScale(attackFrameHeight ? PLAYER_ART_HEIGHT / attackFrameHeight : PLAYER_ART_SCALE);
     }
+    this.playerArt.setOrigin(texture === PLAYER_TEXTURES.roosterThrow ? (this.facing < 0 ? 1 - PLAYER_THROW_PIVOT_X : PLAYER_THROW_PIVOT_X) : 0.5, 1);
     this.positionPlayerArt();
     this.playerArt.setFlipX(this.facing < 0);
     this.playerArt.setAlpha(this.respawning ? 0.55 : 1);
@@ -1145,28 +1170,45 @@ export class TrialScene extends Phaser.Scene {
       .setFlipX(this.facing < 0)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(4);
-    this.motorcycleProjectiles.push({ sprite, direction: this.facing, expiresAt: time + MOTORCYCLE_PROJECTILE_DURATION });
+    this.playerProjectiles.push({ sprite, direction: this.facing, speed: MOTORCYCLE_PROJECTILE_SPEED, hitWidth: 32, hitHeight: 12, expiresAt: time + MOTORCYCLE_PROJECTILE_DURATION });
     this.playEffect("fx-attack-impact", x, y, 28, 28, this.facing < 0);
     this.audio.play("shoot");
   }
 
-  private updateMotorcycleProjectiles(time: number, delta: number) {
+  private startRoosterThrow(time: number) {
+    if (time < this.nextRoosterAt) return;
+    this.nextRoosterAt = time + ROOSTER_COOLDOWN_MS;
+    this.throwUntil = time + PLAYER_THROW_DURATION_MS;
+    this.attackUntil = 0;
+    const x = this.player.x + this.facing * 84;
+    const y = this.player.y - 42;
+    const sprite = this.add.sprite(x, y, ROOSTER_SHEET)
+      .setDisplaySize(64, 64)
+      .setFlipX(this.facing > 0)
+      .setDepth(4)
+      .play(ROOSTER_ANIMATION);
+    this.playerProjectiles.push({ sprite, direction: this.facing, speed: ROOSTER_SPEED, hitWidth: 56, hitHeight: 30, expiresAt: time + ROOSTER_DURATION_MS });
+    this.audio.play("rooster");
+    this.emitHud();
+  }
+
+  private updatePlayerProjectiles(time: number, delta: number) {
     const step = Phaser.Math.Clamp(delta, 0, 50) / 1_000;
-    for (let index = this.motorcycleProjectiles.length - 1; index >= 0; index -= 1) {
-      const projectile = this.motorcycleProjectiles[index];
+    for (let index = this.playerProjectiles.length - 1; index >= 0; index -= 1) {
+      const projectile = this.playerProjectiles[index];
       const sprite = projectile.sprite;
       if (time >= projectile.expiresAt) {
         sprite.destroy();
-        this.motorcycleProjectiles.splice(index, 1);
+        this.playerProjectiles.splice(index, 1);
         continue;
       }
       const previousX = sprite.x;
-      sprite.x += projectile.direction * MOTORCYCLE_PROJECTILE_SPEED * step;
+      sprite.x += projectile.direction * projectile.speed * step;
       const sweptBounds = new Phaser.Geom.Rectangle(
-        Math.min(previousX, sprite.x) - sprite.displayWidth / 2,
-        sprite.y - sprite.displayHeight / 2,
-        Math.abs(sprite.x - previousX) + sprite.displayWidth,
-        sprite.displayHeight,
+        Math.min(previousX, sprite.x) - projectile.hitWidth / 2,
+        sprite.y - projectile.hitHeight / 2,
+        Math.abs(sprite.x - previousX) + projectile.hitWidth,
+        projectile.hitHeight,
       );
       let target: EnemyUnit | undefined;
       let nearestDistance = Infinity;
@@ -1182,17 +1224,18 @@ export class TrialScene extends Phaser.Scene {
       if (target) {
         this.hitEnemy(target, time, projectile.direction);
         sprite.destroy();
-        this.motorcycleProjectiles.splice(index, 1);
+        this.playerProjectiles.splice(index, 1);
       }
     }
   }
 
-  private clearMotorcycleProjectiles() {
-    for (const projectile of this.motorcycleProjectiles) projectile.sprite.destroy();
-    this.motorcycleProjectiles.length = 0;
+  private clearPlayerProjectiles() {
+    for (const projectile of this.playerProjectiles) projectile.sprite.destroy();
+    this.playerProjectiles.length = 0;
   }
 
   private startAttack(time: number) {
+    this.throwUntil = 0;
     if (time < this.motorcycleRideUntil) {
       this.launchMotorcycleProjectile(time);
       return;
@@ -1297,7 +1340,7 @@ export class TrialScene extends Phaser.Scene {
     if (this.respawning || this.finished) return;
     for (const projectile of this.enemyProjectiles) projectile.sprite.destroy();
     this.enemyProjectiles.length = 0;
-    this.clearMotorcycleProjectiles();
+    this.clearPlayerProjectiles();
     this.respawning = true;
     this.health = 0;
     this.playEffect("fx-dash-smoke", this.player.x, this.player.y, 66, 58);
@@ -1330,7 +1373,7 @@ export class TrialScene extends Phaser.Scene {
       this.airJumpAvailable = true;
       this.jumpBufferUntil = 0;
       this.coyoteUntil = 0;
-      this.playerArt.setTexture(PLAYER_TEXTURES.idle).setScale(PLAYER_ART_SCALE);
+      this.playerArt.setTexture(PLAYER_TEXTURES.idle).setOrigin(0.5, 1).setScale(PLAYER_ART_SCALE);
       this.positionPlayerArt();
       this.playerArt.setAlpha(1);
       this.health = PLAYER_MAX_HEALTH;
@@ -1338,6 +1381,8 @@ export class TrialScene extends Phaser.Scene {
       this.playerArt.clearTint();
       this.invulnerableUntil = this.time.now + 1_050;
       this.nextDashAt = this.time.now;
+      this.nextRoosterAt = this.time.now;
+      this.throwUntil = 0;
       this.respawning = false;
       this.emitHud();
     });
@@ -1365,6 +1410,7 @@ export class TrialScene extends Phaser.Scene {
       maxHealth: PLAYER_MAX_HEALTH,
       distance,
       dashReady: this.time.now >= this.nextDashAt,
+      roosterReady: this.time.now >= this.nextRoosterAt,
       checkpoint: this.checkpointCount,
     };
   }

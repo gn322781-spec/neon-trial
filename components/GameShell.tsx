@@ -33,7 +33,7 @@ async function exitGameFullscreen() {
   else await fullscreenDocument.webkitExitFullscreen?.();
 }
 
-const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, lives: 4, health: PLAYER_MAX_HEALTH, maxHealth: PLAYER_MAX_HEALTH, distance: 0, dashReady: true, checkpoint: 0 };
+const EMPTY_HUD: TrialHud = { score: 0, zone: 1, deaths: 0, lives: 4, health: PLAYER_MAX_HEALTH, maxHealth: PLAYER_MAX_HEALTH, distance: 0, dashReady: true, roosterReady: true, checkpoint: 0 };
 type RankRow = { position: number; nickname: string; best_score: number };
 const RANKING_NAME_LAYERS = ["Layer_43", "Layer_39", "Layer_35", "Layer_32", "Layer_29", "Layer_26", "Layer_23"];
 const RANKING_SCORE_LAYERS = ["Layer_42", "Layer_38", "Layer_34", "Layer_31", "Layer_28", "Layer_25", "Layer_22"];
@@ -353,7 +353,7 @@ export function GameShell() {
                 <button type="button" className="hud-icon-button" onClick={() => { controls.releaseAll(); setPaused(false); setScreen("home"); }} aria-label="Voltar ao menu"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Home.png" alt="" draggable={false} /></button>
                 <button type="button" className="hud-icon-button pause-trigger" onClick={() => setPaused(true)} aria-label="Pausar partida"><img src="/ui/basic-gui/Icons/Icon_Small_WhiteOutline_Pause.png" alt="" draggable={false} /></button>
               </div>
-              <div className={`dash-state ${hud.dashReady ? "ready" : ""}`}><span className="dash-led" /> DASH {hud.dashReady ? "OK" : "RECARREGANDO"}</div>
+              <div className={`dash-state ${hud.roosterReady ? "ready" : ""}`}><span className="dash-led" /> GALO {hud.roosterReady ? "OK" : "RECARREGANDO"}</div>
               <span className={`attempt-state ${attemptStatus}`}>{attemptStatus === "ready" ? "TENTATIVA VINCULADA" : attemptStatus === "connecting" ? "CONECTANDO" : "MODO LOCAL"}</span>
               {fullscreenNotice && <span className="fullscreen-notice" role="status">{fullscreenNotice}</span>}
             </div>
@@ -372,7 +372,7 @@ export function GameShell() {
               <small>ESC PARA CONTINUAR</small>
             </section>
           </div>}
-          <div className="game-hint"><span>← → ANDAR</span><span>↓ AGACHAR</span><span>ESPAÇO 2× PULO DUPLO</span><span>SHIFT DASH</span><span>X SOCAR</span><span>ESC PAUSA</span></div>
+          <div className="game-hint"><span>← → ANDAR</span><span>↓ AGACHAR</span><span>ESPAÇO 2× PULO DUPLO</span><span>E GALO</span><span>SHIFT DASH</span><span>X SOCAR</span><span>ESC PAUSA</span></div>
         </section>
         <div className="portrait-message"><span>↻</span><strong>Gire o aparelho</strong><small>NEON TRIAL foi projetado para jogar na horizontal.</small></div>
       </main>

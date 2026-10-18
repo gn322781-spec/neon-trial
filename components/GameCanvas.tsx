@@ -7,7 +7,7 @@ import type { TrialHud, TrialResult } from "@/game/TrialScene";
 
 const BUTTONS: { action: Action; label: string; className: string; icon?: string }[] = [
   { action: "jump", label: "PULAR", className: "jump", icon: "cross" },
-  { action: "dash", label: "DASH", className: "dash", icon: "triangle" },
+  { action: "rooster", label: "GALO", className: "dash", icon: "triangle" },
   { action: "attack", label: "ATQ", className: "attack", icon: "square" },
 ];
 
@@ -189,7 +189,7 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult, paused = f
   };
 
   return (
-    <div className="game-stage" aria-label="Área do jogo. Use o analógico ou A e D para mover, espaço para pular, Shift para dash e X para atacar.">
+    <div className="game-stage" aria-label="Área do jogo. Use o analógico ou A e D para mover, espaço para pular, E para arremessar um galo, Shift para dash e X para atacar.">
       <div ref={hostRef} className="phaser-host" />
       <div className="touch-controls" aria-label="Controles de toque">
         <div className="touch-group touch-movement">
@@ -202,7 +202,7 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult, paused = f
         </div>
         <div className="touch-group touch-actions">
           {BUTTONS.map((item) => (
-            <button key={item.action} className={`touch-button ${item.className} icon-control`} aria-label={item.action === "jump" ? "Pular" : item.action === "dash" ? "Dash" : "Atacar"}
+            <button key={item.action} className={`touch-button ${item.className} icon-control`} aria-label={item.action === "jump" ? "Pular" : item.action === "rooster" ? "Arremessar galo" : "Atacar"}
               onPointerDown={(event) => press(event, item.action)} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>
               {item.icon && <span className="touch-icon" aria-hidden="true">
                 <img src={`/ui/buttons/${item.icon}-1.png`} alt="" draggable={false} />
@@ -215,4 +215,3 @@ export function GameCanvas({ runId, controls, audio, onHud, onResult, paused = f
     </div>
   );
 }
-

@@ -1,4 +1,4 @@
-export type Action = "left" | "right" | "jump" | "dash" | "attack";
+export type Action = "left" | "right" | "jump" | "dash" | "attack" | "rooster";
 
 /** Tracks each physical source separately so releasing one finger won't cancel another. */
 export class Controls {
@@ -28,6 +28,7 @@ export class Controls {
       jump: this.isDown("jump"),
       dash: this.isDown("dash"),
       attack: this.isDown("attack"),
+      rooster: this.isDown("rooster"),
     };
   }
 }
